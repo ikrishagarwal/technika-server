@@ -1,0 +1,28 @@
+{
+  "name": "technika25-server",
+  "version": "1.0.0",
+  "description": "This project was bootstrapped with Fastify-CLI.",
+  "main": "app.ts",
+  "scripts": {
+    "build:ts": "tsc",
+    "watch:ts": "tsc -w",
+    "start": "npm run build:ts && node dist/server.js",
+    "dev": "npm run build:ts && concurrently -k -p \"[{name}]\" -n \"TypeScript,App\" -c \"yellow.bold,cyan.bold\" \"npm:watch:ts\" \"npm:dev:start\"",
+    "dev:start": "node --enable-source-maps dist/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.6.2",
+  "dependencies": {
+    "fastify": "^5.0.0",
+    "ws": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.8",
+    "@types/ws": "^8.5.4",
+    "concurrently": "^9.0.0",
+    "fastify-tsconfig": "^3.0.0",
+    "typescript": "~5.9.2"
+  }
+}
