@@ -1,3 +1,5 @@
+// load environment variables from .env (if present)
+import "dotenv/config";
 import app from "./app";
 
 const start = async () => {

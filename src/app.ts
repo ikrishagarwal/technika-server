@@ -4,7 +4,9 @@ import root from "./routes/root";
 
 export interface AppOptions extends FastifyServerOptions {}
 
-const options: AppOptions = {};
+const options: AppOptions = {
+  logger: true,
+};
 
 const app: FastifyInstance = Fastify(options);
 
