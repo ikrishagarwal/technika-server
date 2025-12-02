@@ -1,21 +1,29 @@
 import Fastify, { FastifyInstance, FastifyServerOptions } from "fastify";
 import websocketPlugin from "./plugins/websocket";
-import root from "./routes/root";
+import routeList from "./routes";
 
 export interface AppOptions extends FastifyServerOptions {}
 
 const options: AppOptions = {
-  logger: true,
+  ignoreTrailingSlash: true,
+  logger: {
+    transport: {
+      target: "pino-pretty",
+      options: {
+        colorize: true,
+        translateTime: "HH:MM:ss",
+        singleLine: false,
+        ignore: "pid,hostname,reqId,responseTime,level",
+      },
+    },
+  },
 };
 
 const app: FastifyInstance = Fastify(options);
 
 app.register(websocketPlugin);
-app.register(root);
 
-// app.listen({
-//   port: process.env.PORT ? parseInt(process.env.PORT) : 3000,
-// });
+routeList.forEach((route) => app.register(route));
 
 export default app;
 export { app, options };
