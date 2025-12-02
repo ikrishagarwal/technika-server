@@ -6,6 +6,7 @@
   "scripts": {
     "build:ts": "tsc",
     "watch:ts": "tsc -w",
+    "watch:start": "nodemon -w ./dist/ ./dist/server.js --enable-source-maps",
     "start": "npm run build:ts && node dist/server.js",
     "dev": "npm run build:ts && concurrently -k -p \"[{name}]\" -n \"TypeScript,App\" -c \"yellow.bold,cyan.bold\" \"npm:watch:ts\" \"npm:dev:start\"",
     "dev:start": "node --enable-source-maps dist/server.js"
