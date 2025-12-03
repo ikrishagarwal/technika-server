@@ -1,19 +1,12 @@
-import { readFileSync } from "node:fs";
 import admin from "firebase-admin";
-import path from "node:path";
 
 let db: admin.firestore.Firestore;
 
 export function initializeFirebase() {
-  const serviceAccountPath = path.join(
-    __dirname,
-    "../../serviceAccountKey.json"
-  );
+  const serviceAccountKey = process.env.SERVICE_ACCOUNT_KEY;
+  const serviceAccount = JSON.parse(serviceAccountKey || "{}");
 
   try {
-    const serviceAccount = JSON.parse(
-      readFileSync(serviceAccountPath, "utf-8")
-    );
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
