@@ -17,6 +17,16 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       const { name, email, phone, yearOfPassing, size, merchName } =
         request.body as AlumniBodyData;
 
+      const existingSnapshot = await db
+        .collection("alumni_registrations")
+        .where("firebaseUid", "==", user.uid)
+        .get();
+
+      if (!existingSnapshot.empty) {
+        // delete the document to allow re-registration assuming the previous attempt failed
+        await existingSnapshot.docs[0].ref.delete();
+      }
+
       const alumniRef = db.collection("alumni_registrations").doc();
 
       let finalPhone = phone.replace(/ /g, "");
@@ -60,6 +70,8 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       const tiqrResponse = await TiQR.createBooking(bookingPayload);
       const tiqrData = (await tiqrResponse.json()) as BookingResponse;
 
+      fastify.log.info(tiqrData);
+
       if (!tiqrData?.payment?.url_to_redirect)
         throw new Error("Failed to obtain payment URL from TiQR");
 
@@ -76,14 +88,14 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
 
         reply.status(200);
         return {
-          status: "registered",
+          status: PaymentStatus.SUCCESS,
           message: "Registration confirmed",
         };
       }
 
       reply.status(200);
       return {
-        status: PaymentStatus.SUCCESS,
+        status: PaymentStatus.PENDING,
         paymentUrl: tiqrData.payment.url_to_redirect,
       };
     } catch (err: any) {
@@ -111,16 +123,18 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
 
       if (snapshot.empty) {
         reply.status(404);
-        return { status: "Not registered" };
+        return { status: "unregistered" };
       }
 
-      const doc = snapshot.docs
-        .map((doc) => doc.data())
-        .sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        )
-        .at(0)!;
+      // const doc = snapshot.docs
+      //   .map((doc) => doc.data())
+      //   .sort(
+      //     (a, b) =>
+      //       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      //   )
+      //   .at(0)!;
+
+      const doc = snapshot.docs[0].data();
 
       reply.status(200);
 
