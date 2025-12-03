@@ -1,10 +1,10 @@
 import { FastifyPluginAsync } from "fastify";
 import { ApiEndpoints } from "../constants";
-import { isAuthTokenValid } from "../lib/auth";
+import { validateAuthToken } from "../lib/auth";
 
 const booking: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   fastify.post("/booking", async function (request, reply) {
-    if (!isAuthTokenValid(request)) {
+    if (!(await validateAuthToken(request))) {
       reply.status(401);
       return {
         error: true,
@@ -71,7 +71,7 @@ const booking: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     // );
 
     // implement a custom token logic if needed
-    if (!isAuthTokenValid(request)) {
+    if (!(await validateAuthToken(request))) {
       reply.status(401);
       return {
         error: true,

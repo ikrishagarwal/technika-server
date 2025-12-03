@@ -1,11 +1,13 @@
 import Fastify, { FastifyInstance, FastifyServerOptions } from "fastify";
-import websocketPlugin from "./plugins/websocket";
-import routeList from "./routes";
+import { readdirSync } from "node:fs";
+import path from "node:path";
 
 export interface AppOptions extends FastifyServerOptions {}
 
 const options: AppOptions = {
-  ignoreTrailingSlash: true,
+  routerOptions: {
+    ignoreTrailingSlash: true,
+  },
   logger: {
     transport: {
       target: "pino-pretty",
@@ -21,9 +23,15 @@ const options: AppOptions = {
 
 const app: FastifyInstance = Fastify(options);
 
-app.register(websocketPlugin);
+const dirs = ["./plugins", "./routes"];
 
-routeList.forEach((route) => app.register(route));
+for (const dir of dirs) {
+  for (const file of readdirSync(path.join(__dirname, dir))) {
+    if (file.endsWith(".ts") || file.endsWith(".js")) {
+      app.register(require(path.join(__dirname, dir, file)));
+    }
+  }
+}
 
 export default app;
 export { app, options };
