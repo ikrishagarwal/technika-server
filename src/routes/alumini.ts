@@ -3,7 +3,7 @@ import { validateAuthToken } from "../lib/auth";
 import { db } from "../lib/firebase";
 import { PaymentStatus, Tickets } from "../lib/enums";
 import { BASE_URL, WebhookSecret } from "../constants";
-import TiQR from "../lib/tiqr";
+import TiQR, { BookingResponse } from "../lib/tiqr";
 
 const alumini: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   fastify.post("/alumini/register", async function (request, reply) {
@@ -58,15 +58,16 @@ const alumini: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       };
 
       const tiqrResponse = await TiQR.createBooking(bookingPayload);
+      const tiqrData = (await tiqrResponse.json()) as BookingResponse;
 
-      if (!tiqrResponse?.payment?.url_to_redirect)
+      if (!tiqrData?.payment?.url_to_redirect)
         throw new Error("Failed to obtain payment URL from TiQR");
 
       await aluminiRef.update({
-        tiqrBookingUid: tiqrResponse.booking.uid,
+        tiqrBookingUid: tiqrData.booking.uid,
       });
 
-      if (tiqrResponse.booking.status === "confirmed") {
+      if (tiqrData.booking.status === "confirmed") {
         // It's a free ticket
         await aluminiRef.update({
           paymentStatus: PaymentStatus.SUCCESS,

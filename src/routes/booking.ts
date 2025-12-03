@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from "fastify";
-import { ApiEndpoints } from "../constants";
 import { validateAuthToken } from "../lib/auth";
+import TiQR from "../lib/tiqr";
 
 const booking: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   fastify.post("/booking", async function (request, reply) {
@@ -23,26 +23,9 @@ const booking: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     }
 
     try {
-      const data = await fetch(ApiEndpoints.createBooking(), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.API_TOKEN || ""}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      //////////////
-      // TODO: API is down for now, so text and fix this part later
-
-      const text = await data.text();
-      fastify.log.info("Booking create response:");
-      fastify.log.info(text);
-      // const jsonData = await data.json();
-      const jsonData = JSON.parse(text);
-      reply.status(data.status);
-      return jsonData;
-      //////////////
+      const tiqrResponse = await TiQR.createBooking(body);
+      reply.status(tiqrResponse.status);
+      return await tiqrResponse.json();
     } catch (err: any) {
       reply.status(500);
       return {
@@ -64,13 +47,6 @@ const booking: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       };
     }
 
-    // fastify.log.info(
-    //   `Fetching booking for UID: ${uid} with token: ${token} : ${
-    //     token.toString().trim() == process.env.AUTH_TOKEN
-    //   }`
-    // );
-
-    // implement a custom token logic if needed
     if (!(await validateAuthToken(request))) {
       reply.status(401);
       return {
@@ -80,23 +56,9 @@ const booking: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     }
 
     try {
-      const data = await fetch(ApiEndpoints.fetchBooking(uid), {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.API_TOKEN || ""}`,
-        },
-      });
-
-      ////////////////////////////
-      // TODO: API is down for now, so text and fix this part later
-      const text = await data.text();
-      console.log("Booking fetch response:", text);
-      // const jsonData = await data.json();
-      const jsonData = JSON.parse(text);
-      reply.status(data.status);
-      return jsonData;
-      ///////////////////////////
+      const tiqrResponse = await TiQR.fetchBooking(uid);
+      reply.status(tiqrResponse.status);
+      return await tiqrResponse.json();
     } catch (err: any) {
       return {
         error: true,
