@@ -12,9 +12,10 @@ This repository contains the server-side code for Technika 25. The server is bui
 1. Install `Node.js`, `pnpm` and `Nodemon` if you haven't already.
 2. Run `pnpm install`
 3. Make a copy of `.env.example` and rename it to `.env`. Fill in the required environment variables.
-4. Open two terminal tabs.
-5. In first tab, run `pnpm run watch:ts` to watch for TypeScript changes.
-6. In second tab, run `pnpm run watch:start` to start the server in development mode.
+4. Create a Firebase service account and download the JSON key file. Save it as `serviceAccountKey.json` in the root directory.
+5. Open two terminal tabs.
+6. In first tab, run `pnpm run watch:ts` to watch for TypeScript changes.
+7. In second tab, run `pnpm run watch:start` to start the server in development mode.
 
 # Important Information
 

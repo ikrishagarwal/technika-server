@@ -1,10 +1,16 @@
 import { FastifyRequest } from "fastify";
+import { admin } from "./firebase";
 
-export function isAuthTokenValid(request: FastifyRequest): boolean {
+export function isAuthTokenValid(request: FastifyRequest) {
   const auth = request.headers["authorization"];
 
-  if (!auth) return false;
-  if (auth.toString() !== process.env.AUTH_TOKEN) return false;
+  if (!auth || !auth.startsWith("Bearer ")) return null;
 
-  return true;
+  const token = auth.slice(7);
+  try {
+    const decodedToken = admin.auth().verifyIdToken(token);
+    return decodedToken;
+  } catch {
+    return null;
+  }
 }
