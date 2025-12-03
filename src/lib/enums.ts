@@ -5,5 +5,5 @@ export enum PaymentStatus {
 }
 
 export enum Tickets {
-  Alumini = 2387,
+  Alumni = 2387,
 }

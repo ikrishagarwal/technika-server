@@ -5,8 +5,8 @@ import { PaymentStatus, Tickets } from "../lib/enums";
 import { BASE_URL, WebhookSecret } from "../constants";
 import TiQR, { BookingResponse } from "../lib/tiqr";
 
-const alumini: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
-  fastify.post("/alumini/register", async function (request, reply) {
+const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
+  fastify.post("/alumni/register", async function (request, reply) {
     try {
       const user = await validateAuthToken(request);
       if (!user) {
@@ -15,9 +15,9 @@ const alumini: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       }
 
       const { name, email, phone, yearOfPassing, size, merchName } =
-        request.body as AluminiBodyData;
+        request.body as AlumniBodyData;
 
-      const aluminiRef = db.collection("alumni_registrations").doc();
+      const alumniRef = db.collection("alumni_registrations").doc();
 
       let finalPhone = phone.replace(/ /g, "");
       if (!finalPhone.startsWith("+")) {
@@ -28,7 +28,7 @@ const alumini: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         }
       }
 
-      const aluminiData = {
+      const alumniData = {
         firebaseUid: user.uid,
         fullName: name,
         email,
@@ -41,7 +41,7 @@ const alumini: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         updatedAt: new Date().toISOString(),
       };
 
-      await aluminiRef.set(aluminiData);
+      await alumniRef.set(alumniData);
 
       const [firstName, ...lastName] = name.trim().split(" ");
 
@@ -50,11 +50,11 @@ const alumini: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         last_name: lastName.join(" "),
         email: email,
         quantity: 1,
-        ticket: Tickets.Alumini,
+        ticket: Tickets.Alumni,
         meta_data: {
-          aluminiId: aluminiRef.id,
+          alumniId: alumniRef.id,
         },
-        callback_url: BASE_URL + "/alumini/callback",
+        callback_url: BASE_URL + "/alumni/callback",
       };
 
       const tiqrResponse = await TiQR.createBooking(bookingPayload);
@@ -63,13 +63,13 @@ const alumini: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       if (!tiqrData?.payment?.url_to_redirect)
         throw new Error("Failed to obtain payment URL from TiQR");
 
-      await aluminiRef.update({
+      await alumniRef.update({
         tiqrBookingUid: tiqrData.booking.uid,
       });
 
       if (tiqrData.booking.status === "confirmed") {
         // It's a free ticket
-        await aluminiRef.update({
+        await alumniRef.update({
           paymentStatus: PaymentStatus.SUCCESS,
           updatedAt: new Date().toISOString(),
         });
@@ -80,8 +80,14 @@ const alumini: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
           message: "Registration confirmed",
         };
       }
+
+      reply.status(200);
+      return {
+        status: PaymentStatus.SUCCESS,
+        paymentUrl: tiqrData.payment.url_to_redirect,
+      };
     } catch (err: any) {
-      fastify.log.error("Error in /alumini/register:", err);
+      fastify.log.error("Error in /alumni/register:", err);
       reply.status(500);
       return {
         error: true,
@@ -90,7 +96,7 @@ const alumini: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       };
     }
   });
-  fastify.get("/alumini/status", async function (request, reply) {
+  fastify.get("/alumni/status", async function (request, reply) {
     try {
       const user = await validateAuthToken(request);
       if (!user) {
@@ -128,22 +134,26 @@ const alumini: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       };
     } catch (err: any) {
       reply.status(500);
-      fastify.log.error("Error in /alumini/status:", err);
+      fastify.log.error("Error in /alumni/status:", err);
       return {
         error: true,
         message: "Internal Server Error",
       };
     }
   });
-  fastify.post("/alumini/callback", async function (request, reply) {
+  fastify.post("/alumni/callback", async function (request, reply) {
     try {
+      fastify.log.info("Received alumni callback:");
+      fastify.log.info(request.body);
+      fastify.log.info("Received alumni headers:");
+      fastify.log.info(request.headers);
       const authToken = request.headers["x-webhook-token"];
       if (authToken !== WebhookSecret) {
         reply.status(401);
         return { error: "Unauthorized" };
       }
 
-      const { meta_data } = request.body as AluminiCallbackData;
+      const { meta_data } = request.body as AlumniCallbackData;
 
       if (!meta_data) {
         reply.status(400);
@@ -190,7 +200,7 @@ const alumini: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       };
     } catch (err: any) {
       reply.status(500);
-      fastify.log.error("Error in /alumini/callback:", err);
+      fastify.log.error("Error in /alumni/callback:", err);
       return {
         error: true,
         message: "Internal Server Error",
@@ -200,9 +210,9 @@ const alumini: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   });
 };
 
-export default alumini;
+export default alumni;
 
-interface AluminiBodyData {
+interface AlumniBodyData {
   name: string;
   email: string;
   phone: string;
@@ -211,7 +221,7 @@ interface AluminiBodyData {
   merchName: string;
 }
 
-interface AluminiCallbackData {
+interface AlumniCallbackData {
   message: string;
   meta_data: {
     booking_uid: string;

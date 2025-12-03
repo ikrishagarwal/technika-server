@@ -1,6 +1,7 @@
 import Fastify, { FastifyInstance, FastifyServerOptions } from "fastify";
 import { readdirSync } from "node:fs";
 import path from "node:path";
+import cors from "@fastify/cors";
 
 export interface AppOptions extends FastifyServerOptions {}
 
@@ -22,6 +23,12 @@ const options: AppOptions = {
 };
 
 const app: FastifyInstance = Fastify(options);
+
+app.register(cors, {
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true,
+});
 
 const dirs = ["./plugins", "./routes"];
 
