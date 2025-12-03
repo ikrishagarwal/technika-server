@@ -7,8 +7,8 @@
     "build:ts": "tsc",
     "watch:ts": "tsc -w",
     "watch:start": "nodemon -w ./dist --enable-source-maps dist/server.js",
-    "start": "npm run build:ts && node dist/server.js",
-    "dev": "npm run build:ts && concurrently -k -p \"[{name}]\" -n \"TypeScript,App\" -c \"yellow.bold,cyan.bold\" \"npm:watch:ts\" \"npm:dev:start\"",
+    "start": "pnpm run build:ts && node dist/server.js",
+    "dev": "pnpm run build:ts && concurrently -k -p \"[{name}]\" -n \"TypeScript,App\" -c \"yellow.bold,cyan.bold\" \"pnpm:watch:ts\" \"pnpm:dev:start\"",
     "dev:start": "node --enable-source-maps dist/server.js"
   },
   "keywords": [],
