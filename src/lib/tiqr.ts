@@ -44,6 +44,12 @@ export interface BookingResponse {
   };
   payment: {
     url_to_redirect: string;
+  };
+}
+
+export interface BookingData {
+  status: string;
+  payment: {
     payment_id: string;
   };
 }

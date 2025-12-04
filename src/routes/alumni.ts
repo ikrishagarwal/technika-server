@@ -3,7 +3,7 @@ import { validateAuthToken } from "../lib/auth";
 import { db } from "../lib/firebase";
 import { PaymentStatus, Tickets } from "../lib/enums";
 import { BASE_URL, PaymentBaseUrl, WebhookSecret } from "../constants";
-import TiQR, { BookingResponse } from "../lib/tiqr";
+import TiQR, { BookingData, BookingResponse } from "../lib/tiqr";
 
 const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   fastify.post("/alumni/register", async function (request, reply) {
@@ -46,7 +46,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
               const tiqrResponse = await TiQR.fetchBooking(
                 doc.data().tiqrBookingUid
               );
-              const tiqrData = (await tiqrResponse.json()) as BookingResponse;
+              const tiqrData = (await tiqrResponse.json()) as BookingData;
               const paymentId = tiqrData.payment?.payment_id;
 
               if (!paymentId) {
@@ -178,8 +178,9 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       const doc = snapshot.docs[0].data();
 
       const tiqrResponse = await TiQR.fetchBooking(doc.tiqrBookingUid);
-      const currentStatus = ((await tiqrResponse.json()) as BookingResponse)
-        .booking?.status;
+      const tiqrData = (await tiqrResponse.json()) as BookingData;
+
+      const currentStatus = tiqrData.status;
 
       if (currentStatus != doc.paymentStatus) {
         docRef.update({
@@ -200,7 +201,8 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       };
     } catch (err: any) {
       reply.status(500);
-      fastify.log.error("Error in /alumni/status:", err);
+      fastify.log.error("Error in /alumni/status:");
+      fastify.log.error(err);
       return {
         error: true,
         message: "Internal Server Error",
