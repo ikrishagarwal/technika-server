@@ -25,21 +25,20 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       if (!existingSnapshot.empty) {
         const doc = existingSnapshot.docs[0];
         switch (doc.data().paymentStatus) {
-          case PaymentStatus.Success:
+          case PaymentStatus.Confirmed:
             reply.status(200);
             return {
-              status: PaymentStatus.Success,
+              status: PaymentStatus.Confirmed,
               message: "Already registered successfully",
             };
 
           case PaymentStatus.PendingPayment:
-          case PaymentStatus.Pending:
           case PaymentStatus.Failed:
             const paymentUrl = doc.data().paymentUrl;
             if (paymentUrl) {
               reply.status(200);
               return {
-                status: PaymentStatus.Pending,
+                status: PaymentStatus.PendingPayment,
                 paymentUrl: paymentUrl,
               };
             } else {
@@ -56,7 +55,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
 
               reply.status(200);
               return {
-                status: PaymentStatus.Pending,
+                status: PaymentStatus.PendingPayment,
                 paymentUrl: PaymentBaseUrl + paymentId,
               };
             }
@@ -86,7 +85,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         yearOfPassing,
         tShirtSize: size,
         merchName,
-        paymentStatus: PaymentStatus.Pending,
+        paymentStatus: PaymentStatus.PendingPayment,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -119,23 +118,23 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         paymentUrl: tiqrData.payment.url_to_redirect,
       });
 
-      if (tiqrData.booking.status === "confirmed") {
+      if (tiqrData.booking.status === PaymentStatus.Confirmed) {
         // It's a free ticket
         await alumniRef.update({
-          paymentStatus: PaymentStatus.Success,
+          paymentStatus: PaymentStatus.Confirmed,
           updatedAt: new Date().toISOString(),
         });
 
         reply.status(200);
         return {
-          status: PaymentStatus.Success,
+          status: PaymentStatus.Confirmed,
           message: "Registration confirmed",
         };
       }
 
       reply.status(200);
       return {
-        status: PaymentStatus.Pending,
+        status: PaymentStatus.PendingPayment,
         paymentUrl: tiqrData.payment.url_to_redirect,
       };
     } catch (err: any) {
@@ -242,8 +241,8 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       const doc = snapshot.docs[0];
       let newStatus;
 
-      if (meta_data.booking_status === "confirmed") {
-        newStatus = PaymentStatus.Success;
+      if (meta_data.booking_status === PaymentStatus.Confirmed) {
+        newStatus = PaymentStatus.Confirmed;
       } else if (
         meta_data.booking_status === "cancelled" ||
         meta_data.booking_status === "failed"
@@ -255,7 +254,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         await doc.ref.update({
           paymentStatus: newStatus,
           updatedAt:
-            newStatus == PaymentStatus.Success
+            newStatus == PaymentStatus.Confirmed
               ? new Date().toISOString()
               : doc.data().updatedAt,
         });
