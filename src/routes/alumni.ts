@@ -1,8 +1,13 @@
 import { FastifyPluginAsync } from "fastify";
 import { validateAuthToken } from "../lib/auth";
 import { db } from "../lib/firebase";
-import { PaymentStatus, Tickets } from "../lib/enums";
-import { BASE_URL, PaymentBaseUrl, WebhookSecret } from "../constants";
+import {
+  FRONT_END_BASE_URL,
+  PaymentBaseUrl,
+  PaymentStatus,
+  Tickets,
+  WebhookSecret,
+} from "../constants";
 import TiQR, { BookingData, BookingResponse } from "../lib/tiqr";
 
 const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
@@ -14,7 +19,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         return { error: "Unauthorized" };
       }
 
-      const { name, email, phone, yearOfPassing, size, merchName } =
+      const { name, email, phone, yearOfPassing } =
         request.body as AlumniBodyData;
 
       const existingSnapshot = await db
@@ -83,8 +88,6 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         email,
         phone: finalPhone,
         yearOfPassing,
-        tShirtSize: size,
-        merchName,
         paymentStatus: PaymentStatus.PendingPayment,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -104,7 +107,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         meta_data: {
           alumniId: alumniRef.id,
         },
-        callback_url: BASE_URL + "/alumni/callback",
+        callback_url: `${FRONT_END_BASE_URL}/alumni`,
       });
       const tiqrData = (await tiqrResponse.json()) as BookingResponse;
 
@@ -164,14 +167,6 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         reply.status(404);
         return { status: "unregistered" };
       }
-
-      // const doc = snapshot.docs
-      //   .map((doc) => doc.data())
-      //   .sort(
-      //     (a, b) =>
-      //       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      //   )
-      //   .at(0)!;
 
       const docRef = snapshot.docs[0].ref;
       const doc = snapshot.docs[0].data();
@@ -284,8 +279,8 @@ interface AlumniBodyData {
   email: string;
   phone: string;
   yearOfPassing: string;
-  size: string;
-  merchName: string;
+  // size: string;
+  // merchName: string;
 }
 
 interface AlumniCallbackData {
