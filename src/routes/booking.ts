@@ -1,7 +1,8 @@
 import { FastifyPluginAsync } from "fastify";
 import { validateAuthToken } from "../lib/auth";
-import TiQR from "../lib/tiqr";
+import TiQR, { BookingPayload } from "../lib/tiqr";
 
+// MFD: I don't think we actually need a route for this, will delete later
 const booking: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   fastify.post("/booking", async function (request, reply) {
     if (!(await validateAuthToken(request))) {
@@ -23,7 +24,7 @@ const booking: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     }
 
     try {
-      const tiqrResponse = await TiQR.createBooking(body);
+      const tiqrResponse = await TiQR.createBooking(body as BookingPayload);
       reply.status(tiqrResponse.status);
       return await tiqrResponse.json();
     } catch (err: any) {

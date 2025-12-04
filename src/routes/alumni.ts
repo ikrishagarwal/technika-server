@@ -2,7 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import { validateAuthToken } from "../lib/auth";
 import { db } from "../lib/firebase";
 import { PaymentStatus, Tickets } from "../lib/enums";
-import { BASE_URL, WebhookSecret } from "../constants";
+import { BASE_URL, PaymentBaseUrl, WebhookSecret } from "../constants";
 import TiQR, { BookingResponse } from "../lib/tiqr";
 
 const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
@@ -23,8 +23,48 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         .get();
 
       if (!existingSnapshot.empty) {
-        // delete the document to allow re-registration assuming the previous attempt failed
-        await existingSnapshot.docs[0].ref.delete();
+        const doc = existingSnapshot.docs[0];
+        switch (doc.data().paymentStatus) {
+          case PaymentStatus.Success:
+            reply.status(200);
+            return {
+              status: PaymentStatus.Success,
+              message: "Already registered successfully",
+            };
+
+          case PaymentStatus.PendingPayment:
+          case PaymentStatus.Pending:
+          case PaymentStatus.Failed:
+            const paymentUrl = doc.data().paymentUrl;
+            if (paymentUrl) {
+              reply.status(200);
+              return {
+                status: PaymentStatus.Pending,
+                paymentUrl: paymentUrl,
+              };
+            } else {
+              const tiqrResponse = await TiQR.fetchBooking(
+                doc.data().tiqrBookingUid
+              );
+              const tiqrData = (await tiqrResponse.json()) as BookingResponse;
+              const paymentId = tiqrData.payment?.payment_id;
+
+              if (!paymentId) {
+                doc.ref.delete();
+                break;
+              }
+
+              reply.status(200);
+              return {
+                status: PaymentStatus.Pending,
+                paymentUrl: PaymentBaseUrl + paymentId,
+              };
+            }
+
+          default:
+            doc.ref.delete();
+            break;
+        }
       }
 
       const alumniRef = db.collection("alumni_registrations").doc();
@@ -46,7 +86,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         yearOfPassing,
         tShirtSize: size,
         merchName,
-        paymentStatus: PaymentStatus.PENDING,
+        paymentStatus: PaymentStatus.Pending,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -55,19 +95,18 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
 
       const [firstName, ...lastName] = name.trim().split(" ");
 
-      const bookingPayload = {
+      const tiqrResponse = await TiQR.createBooking({
         first_name: firstName,
         last_name: lastName.join(" "),
         email: email,
+        phone_number: finalPhone,
         quantity: 1,
         ticket: Tickets.Alumni,
         meta_data: {
           alumniId: alumniRef.id,
         },
         callback_url: BASE_URL + "/alumni/callback",
-      };
-
-      const tiqrResponse = await TiQR.createBooking(bookingPayload);
+      });
       const tiqrData = (await tiqrResponse.json()) as BookingResponse;
 
       fastify.log.info(tiqrData);
@@ -77,25 +116,26 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
 
       await alumniRef.update({
         tiqrBookingUid: tiqrData.booking.uid,
+        paymentUrl: tiqrData.payment.url_to_redirect,
       });
 
       if (tiqrData.booking.status === "confirmed") {
         // It's a free ticket
         await alumniRef.update({
-          paymentStatus: PaymentStatus.SUCCESS,
+          paymentStatus: PaymentStatus.Success,
           updatedAt: new Date().toISOString(),
         });
 
         reply.status(200);
         return {
-          status: PaymentStatus.SUCCESS,
+          status: PaymentStatus.Success,
           message: "Registration confirmed",
         };
       }
 
       reply.status(200);
       return {
-        status: PaymentStatus.PENDING,
+        status: PaymentStatus.Pending,
         paymentUrl: tiqrData.payment.url_to_redirect,
       };
     } catch (err: any) {
@@ -134,12 +174,24 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       //   )
       //   .at(0)!;
 
+      const docRef = snapshot.docs[0].ref;
       const doc = snapshot.docs[0].data();
+
+      const tiqrResponse = await TiQR.fetchBooking(doc.tiqrBookingUid);
+      const currentStatus = ((await tiqrResponse.json()) as BookingResponse)
+        .booking?.status;
+
+      if (currentStatus != doc.paymentStatus) {
+        docRef.update({
+          paymentStatus: currentStatus,
+          updatedAt: new Date().toISOString(),
+        });
+      }
 
       reply.status(200);
 
       return {
-        status: doc.paymentStatus,
+        status: currentStatus,
         details: {
           name: doc.fullName,
           merchName: doc.merchName,
@@ -189,19 +241,19 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       let newStatus;
 
       if (meta_data.booking_status === "confirmed") {
-        newStatus = PaymentStatus.SUCCESS;
+        newStatus = PaymentStatus.Success;
       } else if (
         meta_data.booking_status === "cancelled" ||
         meta_data.booking_status === "failed"
       ) {
-        newStatus = PaymentStatus.FAILED;
+        newStatus = PaymentStatus.Failed;
       }
 
       if (newStatus !== undefined && newStatus !== doc.data().paymentStatus) {
         await doc.ref.update({
           paymentStatus: newStatus,
           updatedAt:
-            newStatus == PaymentStatus.SUCCESS
+            newStatus == PaymentStatus.Success
               ? new Date().toISOString()
               : doc.data().updatedAt,
         });

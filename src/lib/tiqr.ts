@@ -3,7 +3,7 @@ import { ApiToken } from "../constants";
 export class TiQR {
   static BASE_URL = "https://api.tiqr.events/";
 
-  static async createBooking(bookingData: object) {
+  static async createBooking(bookingData: BookingPayload) {
     try {
       return fetch(`${TiQR.BASE_URL}participant/booking/`, {
         method: "POST",
@@ -44,7 +44,21 @@ export interface BookingResponse {
   };
   payment: {
     url_to_redirect: string;
+    payment_id: string;
   };
+}
+
+export interface BookingPayload {
+  first_name: string;
+  last_name: string;
+  phone_number: string;
+  email: string;
+  quantity: number;
+  ticket: number;
+  meta_data?: {
+    [key: string]: any;
+  };
+  callback_url?: string;
 }
 
 export default TiQR;

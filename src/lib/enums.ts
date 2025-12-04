@@ -1,7 +1,8 @@
 export enum PaymentStatus {
-  PENDING = "pending",
-  SUCCESS = "success",
-  FAILED = "failed",
+  Pending = "pending",
+  Success = "success",
+  Failed = "failed",
+  PendingPayment = "pending_payment",
 }
 
 export enum Tickets {
