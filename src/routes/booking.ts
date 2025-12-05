@@ -23,6 +23,14 @@ const booking: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       };
     }
 
+    if (request.headers["x-private-secret"] !== process.env.TESTING_SECRET) {
+      reply.status(403);
+      return {
+        error: true,
+        message: "Forbidden",
+      };
+    }
+
     try {
       const tiqrResponse = await TiQR.createBooking(body as BookingPayload);
       reply.status(tiqrResponse.status);
@@ -53,6 +61,14 @@ const booking: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       return {
         error: true,
         message: "Unauthorized",
+      };
+    }
+
+    if (request.headers["x-private-secret"] !== process.env.TESTING_SECRET) {
+      reply.status(403);
+      return {
+        error: true,
+        message: "Forbidden",
       };
     }
 
