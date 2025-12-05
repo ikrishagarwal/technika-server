@@ -1,4 +1,5 @@
 import { FastifyPluginAsync } from "fastify";
+import * as z from "zod";
 import { validateAuthToken } from "../lib/auth";
 import { db } from "../lib/firebase";
 import {
@@ -14,13 +15,23 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   fastify.post("/alumni/register", async function (request, reply) {
     try {
       const user = await validateAuthToken(request);
+      fastify.log.info(user);
       if (!user) {
         reply.status(401);
         return { error: "Unauthorized" };
       }
 
-      const { name, email, phone, yearOfPassing, size } =
-        request.body as AlumniBodyData;
+      const parsedBody = AlumniBodyData.safeParse(request.body);
+
+      if (!parsedBody.success) {
+        reply.status(400);
+        return {
+          error: "Invalid request body",
+          details: parsedBody.error.type,
+        };
+      }
+
+      const { name, email, phone, yearOfPassing, size } = parsedBody.data;
 
       const existingSnapshot = await db
         .collection("alumni_registrations")
@@ -151,6 +162,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       };
     }
   });
+
   fastify.get("/alumni/status", async function (request, reply) {
     try {
       const user = await validateAuthToken(request);
@@ -204,6 +216,8 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       };
     }
   });
+
+  // Not sure about this endpoint, if it's actually put to use..???
   fastify.post("/alumni/callback", async function (request, reply) {
     try {
       fastify.log.info("Received alumni callback:");
@@ -273,16 +287,14 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   });
 };
 
-export default alumni;
-
-interface AlumniBodyData {
-  name: string;
-  email: string;
-  phone: string;
-  yearOfPassing: string;
-  size: string;
-  // merchName: string;
-}
+const AlumniBodyData = z.object({
+  name: z.string().min(2),
+  email: z.email(),
+  phone: z.string().min(10),
+  yearOfPassing: z.coerce.number().min(1950).max(2026),
+  size: z.string().min(1),
+  merchName: z.string().optional(),
+});
 
 interface AlumniCallbackData {
   message: string;
@@ -291,3 +303,5 @@ interface AlumniCallbackData {
     booking_status: string;
   };
 }
+
+export default alumni;
