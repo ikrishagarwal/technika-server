@@ -19,7 +19,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         return { error: "Unauthorized" };
       }
 
-      const { name, email, phone, yearOfPassing } =
+      const { name, email, phone, yearOfPassing, size } =
         request.body as AlumniBodyData;
 
       const existingSnapshot = await db
@@ -88,6 +88,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         email,
         phone: finalPhone,
         yearOfPassing,
+        tShirtSize: size || "",
         paymentStatus: PaymentStatus.PendingPayment,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -279,7 +280,7 @@ interface AlumniBodyData {
   email: string;
   phone: string;
   yearOfPassing: string;
-  // size: string;
+  size: string;
   // merchName: string;
 }
 
