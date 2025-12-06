@@ -15,3 +15,6 @@ export enum PaymentStatus {
 export enum Tickets {
   Alumni = 2387,
 }
+
+// Replace the testing ticket ID with actual ticket IDs once they're available
+export const AllowedTicketIds = [2352];

@@ -114,7 +114,6 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
         last_name: lastName.join(" "),
         email: email,
         phone_number: finalPhone,
-        quantity: 1,
         ticket: Tickets.Alumni,
         meta_data: {
           alumniId: alumniRef.id,

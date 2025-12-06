@@ -59,7 +59,6 @@ export interface BookingPayload {
   last_name: string;
   phone_number: string;
   email: string;
-  quantity: number;
   ticket: number;
   meta_data?: {
     [key: string]: any;
