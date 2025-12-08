@@ -15,7 +15,6 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   fastify.post("/alumni/register", async function (request, reply) {
     try {
       const user = await validateAuthToken(request);
-      fastify.log.info(user);
       if (!user) {
         reply.status(401);
         return { error: "Unauthorized" };
@@ -122,8 +121,6 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       });
       const tiqrData = (await tiqrResponse.json()) as BookingResponse;
 
-      fastify.log.info(tiqrData);
-
       if (!tiqrData?.payment?.url_to_redirect)
         throw new Error("Failed to obtain payment URL from TiQR");
 
@@ -219,10 +216,6 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   // Not sure about this endpoint, if it's actually put to use..???
   fastify.post("/alumni/callback", async function (request, reply) {
     try {
-      fastify.log.info("Received alumni callback:");
-      fastify.log.info(request.body);
-      fastify.log.info("Received alumni headers:");
-      fastify.log.info(request.headers);
       const authToken = request.headers["x-webhook-token"];
       if (authToken !== WebhookSecret) {
         reply.status(401);
