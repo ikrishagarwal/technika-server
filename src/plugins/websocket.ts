@@ -40,6 +40,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify) => {
         let parsed: any;
         try {
           parsed = JSON.parse(text);
+          fastify.log.info(parsed);
         } catch (err) {
           // not JSON, ignore or optionally broadcast raw
           fastify.log.debug("ws: writable sent non-json message");
