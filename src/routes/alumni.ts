@@ -285,7 +285,7 @@ const AlumniBodyData = z.object({
   phone: z.string().min(10),
   yearOfPassing: z.coerce.number().min(1950).max(2026),
   size: z.string().min(1),
-  merchName: z.string().optional(),
+  merchName: z.string().optional().nullable(),
 });
 
 interface AlumniCallbackData {

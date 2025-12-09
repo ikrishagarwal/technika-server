@@ -63,7 +63,7 @@ export interface BookingPayload {
   meta_data?: {
     [key: string]: any;
   };
-  callback_url?: string;
+  callback_url?: string | null;
 }
 
 export default TiQR;

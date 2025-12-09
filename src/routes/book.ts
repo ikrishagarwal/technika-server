@@ -165,7 +165,7 @@ const book: FastifyPluginAsync = async (fastify): Promise<void> => {
 const EventBody = z.object({
   name: z.string().min(1),
   phone: z.string().trim().min(10),
-  callbackUrl: z.url().optional(),
+  callbackUrl: z.url().optional().nullable(),
 });
 
 interface PaidUserPayload extends Record<string, any> {
