@@ -160,6 +160,83 @@ const book: FastifyPluginAsync = async (fastify): Promise<void> => {
       };
     }
   });
+
+  fastify.get("/book/:uid/status", async function (request, reply) {
+    try {
+      const uid = Number((request.params as { uid: string }).uid);
+
+      if (!uid || isNaN(uid) || !AllowedTicketIds.includes(uid)) {
+        reply.status(400);
+        return {
+          error: true,
+          message: "Invalid or missing event ID",
+        };
+      }
+
+      const user = await validateAuthToken(request);
+
+      if (!user) {
+        reply.status(401);
+        return {
+          error: true,
+          message: "Unauthorized",
+        };
+      }
+
+      const dbUserSnapshot = await db
+        .collection("paid_users")
+        .where("firebaseUid", "==", user.uid)
+        .get();
+
+      if (dbUserSnapshot.empty) {
+        reply.status(404);
+        return {
+          error: true,
+          message: "User not found",
+        };
+      }
+
+      const dbUserRef = dbUserSnapshot.docs[0].ref;
+      const dbUserData = dbUserSnapshot.docs[0].data();
+
+      if (!dbUserData.events[uid]) {
+        return {
+          success: true,
+          status: "unregistered",
+        };
+      }
+
+      if (dbUserData.events[uid].status === PaymentStatus.Confirmed) {
+        return {
+          success: true,
+          status: PaymentStatus.Confirmed,
+        };
+      }
+
+      const tiqrResponse = await TiQR.fetchBooking(
+        dbUserData.events[uid].bookingUid
+      );
+      const tiqrData = (await tiqrResponse.json()) as BookingData;
+
+      if (dbUserData.events[uid].status !== tiqrData.status) {
+        await dbUserRef.update({
+          [`events.${uid}.status`]: tiqrData.status,
+        });
+      }
+
+      return {
+        success: true,
+        status: tiqrData.status,
+      };
+    } catch (err: any) {
+      reply.status(500);
+      fastify.log.error("Error in /book/:uid/status:", err);
+      return {
+        error: true,
+        message: err.message || String(err),
+      };
+    }
+  });
 };
 
 const EventBody = z.object({
