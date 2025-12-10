@@ -1,15 +1,14 @@
 import { FastifyRequest } from "fastify";
 import { admin } from "./firebase";
 
-export function validateAuthToken(request: FastifyRequest) {
+export async function validateAuthToken(request: FastifyRequest) {
   const auth = request.headers["authorization"];
 
   if (!auth || !auth.startsWith("Bearer ")) return null;
 
   const token = auth.slice(7);
   try {
-    const decodedToken = admin.auth().verifyIdToken(token);
-    return decodedToken;
+    return await admin.auth().verifyIdToken(token);
   } catch {
     return null;
   }
