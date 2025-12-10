@@ -1,7 +1,7 @@
 import Fastify, { FastifyInstance, FastifyServerOptions } from "fastify";
+import cors from "@fastify/cors";
 import { readdirSync } from "node:fs";
 import path from "node:path";
-import cors from "@fastify/cors";
 
 export interface AppOptions extends FastifyServerOptions {}
 
