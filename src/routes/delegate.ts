@@ -54,7 +54,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
           updatedAt: FieldValue.serverTimestamp(),
         } as DelegateUserData;
 
-        if (snapshot.exists && snapshot.data()!.createdAt === undefined) {
+        if (!snapshot.exists || snapshot.data()!.createdAt === undefined) {
           updatePayload.createdAt = FieldValue.serverTimestamp();
         }
 
@@ -154,7 +154,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
           updatedAt: FieldValue.serverTimestamp(),
         } as DelegateUserData;
 
-        if (userSnap.exists && userSnap.data()!.createdAt === undefined) {
+        if (!userSnap.exists || userSnap.data()!.createdAt === undefined) {
           updatePayload.createdAt = FieldValue.serverTimestamp();
         }
 
