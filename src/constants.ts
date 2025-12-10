@@ -17,4 +17,4 @@ export enum Tickets {
 }
 
 // Replace the testing ticket ID with actual ticket IDs once they're available
-export const AllowedTicketIds = process.env["TICKETS"] ? process.env["TICKETS"].split(",") : [];
+export const AllowedTicketIds = process.env["TICKETS"] ? process.env["TICKETS"].split(",").map(t => Number(t)).filter(t => !isNaN(t)) : [];
