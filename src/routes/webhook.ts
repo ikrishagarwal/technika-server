@@ -1,0 +1,59 @@
+import { FastifyPluginAsync } from "fastify";
+
+const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
+  fastify.addHook("onRequest", async (request, reply) => {
+    const token = request.headers["x-webhook-token"];
+    const webhookToken = process.env.WEBHOOK_TOKEN;
+
+    if (!webhookToken) {
+      fastify.log.error("Webhook secret not configured");
+      return reply //
+        .code(500)
+        .send({
+          error: true,
+          message: "Internal Server Error",
+        });
+    }
+
+    if (token !== webhookToken) {
+      fastify.log.warn("Unauthorized webhook access attempt");
+      return reply //
+        .code(401)
+        .send({
+          error: true,
+          message: "Unauthorized",
+        });
+    }
+  });
+
+  fastify.post("/webhook", async function (request, reply) {
+    try {
+      const body = request.body as WebhookPayload;
+
+      fastify.log.info("Received webhook:");
+      fastify.log.info(body);
+
+      reply.status(204).send();
+    } catch (err: any) {
+      fastify.log.error("Error in /webhook:");
+      fastify.log.error(err);
+      reply.status(err.statusCode || 500);
+      return {
+        error: true,
+        message: err.message || String(err),
+      };
+    }
+  });
+};
+
+interface WebhookPayload {
+  message: string;
+  meta_data: {
+    booking_uid: string;
+    booking_status: string;
+    booking_quantity: number;
+    booking_id: string;
+  };
+}
+
+export default Webhook;
