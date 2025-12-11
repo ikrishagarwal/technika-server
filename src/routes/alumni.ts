@@ -185,7 +185,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
 
       const currentStatus = tiqrData.status;
 
-      if (currentStatus != doc.paymentStatus) {
+      if (currentStatus && currentStatus != doc.paymentStatus) {
         docRef.update({
           paymentStatus: currentStatus,
           updatedAt: new Date().toISOString(),

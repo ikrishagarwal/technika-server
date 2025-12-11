@@ -427,7 +427,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       const tiqrResponse = await TiQR.fetchBooking(userData.tiqrBookingUid);
       const tiqrData = (await tiqrResponse.json()) as BookingData;
 
-      if (userData.paymentStatus !== tiqrData.status) {
+      if (tiqrData.status && tiqrData.status !== userData.paymentStatus) {
         await userSnap.ref.update({
           paymentStatus: tiqrData.status,
           updatedAt: FieldValue.serverTimestamp(),
