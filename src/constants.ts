@@ -14,7 +14,12 @@ export enum PaymentStatus {
 
 export enum Tickets {
   Alumni = 2387,
+  Delegate = 2399,
 }
 
-// Replace the testing ticket ID with actual ticket IDs once they're available
-export const AllowedTicketIds = process.env["TICKETS"] ? process.env["TICKETS"].split(",").map(t => Number(t)).filter(t => !isNaN(t)) : [];
+export const AllowedTicketIds = process.env["TICKETS"]
+  ? process.env["TICKETS"]
+      .split(",")
+      .map((t) => Number(t))
+      .filter((t) => !isNaN(t))
+  : [];

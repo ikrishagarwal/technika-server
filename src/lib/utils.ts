@@ -5,9 +5,13 @@ export function uuid() {
   return customAlphabet(chars, 15)();
 }
 
-export function httpError(statusCode: number, message: object) {
-  const err = new Error();
-  (err as any).error = message;
-  (err as any).statusCode = statusCode;
-  return err;
+export class HttpError extends Error {
+  statusCode: number;
+  error: object;
+
+  constructor(statusCode: number, error: object) {
+    super();
+    this.statusCode = statusCode;
+    this.error = error;
+  }
 }
