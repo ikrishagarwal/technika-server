@@ -42,6 +42,9 @@ export interface BookingResponse {
     uid: string;
     status: string;
   };
+  ticket: {
+    id: number;
+  };
   payment: {
     url_to_redirect: string;
   };

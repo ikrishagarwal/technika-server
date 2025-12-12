@@ -51,7 +51,7 @@ const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
     }
 
     const tiqrData = (await tiqrResponse.json()) as BookingResponse;
-    const ticketId = String(tiqrData.booking.id);
+    const ticketId = String(tiqrData.ticket.id);
 
     if (!Object.keys(EventMappings).includes(ticketId)) {
       return reply.code(204).send();
