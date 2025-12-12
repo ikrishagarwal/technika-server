@@ -1,4 +1,5 @@
 import { FastifyPluginAsync } from "fastify";
+import Sentry from "@sentry/node";
 
 const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
   fastify.addHook("onRequest", async (request, reply) => {
@@ -31,6 +32,13 @@ const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
 
     fastify.log.info("Received webhook:");
     fastify.log.info(body);
+
+    Sentry.captureMessage("Received webhook", {
+      level: "info",
+      extra: {
+        payload: body,
+      },
+    });
 
     reply.status(204).send();
   });
