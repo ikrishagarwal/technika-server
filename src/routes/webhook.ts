@@ -27,22 +27,12 @@ const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
   });
 
   fastify.post("/webhook", async function (request, reply) {
-    try {
-      const body = request.body as WebhookPayload;
+    const body = request.body as WebhookPayload;
 
-      fastify.log.info("Received webhook:");
-      fastify.log.info(body);
+    fastify.log.info("Received webhook:");
+    fastify.log.info(body);
 
-      reply.status(204).send();
-    } catch (err: any) {
-      fastify.log.error("Error in /webhook:");
-      fastify.log.error(err);
-      reply.status(err.statusCode || 500);
-      return {
-        error: true,
-        message: err.message || String(err),
-      };
-    }
+    reply.status(204).send();
   });
 };
 

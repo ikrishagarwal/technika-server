@@ -1,7 +1,9 @@
 import Fastify, { FastifyInstance, FastifyServerOptions } from "fastify";
 import cors from "@fastify/cors";
+import Sentry from "@sentry/node";
 import { readdirSync } from "node:fs";
 import path from "node:path";
+import { DecodedIdToken } from "firebase-admin/auth";
 
 export interface AppOptions extends FastifyServerOptions {}
 
@@ -30,6 +32,41 @@ app.register(cors, {
   credentials: true,
 });
 
+app.setErrorHandler((error, request, reply) => {
+  const err = error as any;
+  const code = Number(err.statusCode) || 500;
+  const user = request.getDecorator<DecodedIdToken>("user");
+  const headers = request.headers;
+  headers.authorization = "";
+
+  if (code >= 400 && code < 500) {
+    request.log.info(err);
+  } else {
+    request.log.error(err);
+
+    Sentry.captureException(error, {
+      extra: {
+        route: request.url,
+        method: request.method,
+        headers: request.headers,
+        query: request.query,
+        params: request.params,
+        body: request.body,
+        user: {
+          uid: user?.uid || "unauthenticated",
+          email: user?.email || "unauthenticated",
+        },
+      },
+    });
+  }
+
+  return reply.code(err.statusCode || 500).send({
+    error: true,
+    message: err.message || "Internal Server Error",
+    details: err.error || {},
+  });
+});
+
 const dirs = ["./plugins", "./routes"];
 
 for (const dir of dirs) {
@@ -39,6 +76,8 @@ for (const dir of dirs) {
     }
   }
 }
+
+Sentry.setupFastifyErrorHandler(app);
 
 export default app;
 export { app, options };

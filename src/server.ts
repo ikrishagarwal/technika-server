@@ -1,5 +1,6 @@
 // load environment variables from .env (if present)
 import "dotenv/config";
+import "./sentry";
 import app from "./app";
 import { initializeFirebase } from "./lib/firebase";
 
