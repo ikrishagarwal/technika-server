@@ -35,7 +35,8 @@ app.register(cors, {
 app.setErrorHandler((error, request, reply) => {
   const err = error as any;
   const code = Number(err.statusCode) || 500;
-  const user = request.getDecorator<DecodedIdToken>("user");
+  // workaround cause fastify devs were real high while making getDecorator
+  const user = (request as any).user as DecodedIdToken | null;
   const headers = request.headers;
   headers.authorization = "";
 
