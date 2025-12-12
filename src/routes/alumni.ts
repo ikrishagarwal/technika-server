@@ -10,15 +10,26 @@ import {
   WebhookSecret,
 } from "../constants";
 import TiQR, { BookingData, BookingResponse } from "../lib/tiqr";
+import { DecodedIdToken } from "firebase-admin/auth";
 
 const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
-  fastify.post("/alumni/register", async function (request, reply) {
-    const user = await validateAuthToken(request);
+  fastify.decorateRequest("user", null);
+  fastify.addHook("onRequest", async (request, reply) => {
+    const user = await validateAuthToken(request).catch(() => null);
+
     if (!user) {
-      reply.status(401);
-      return { error: "Unauthorized" };
+      reply.code(401);
+      return {
+        error: true,
+        message: "Unauthorized",
+      };
     }
 
+    request.setDecorator("user", user);
+  });
+
+  fastify.post("/alumni/register", async function (request, reply) {
+    const user = request.getDecorator<DecodedIdToken>("user");
     const parsedBody = AlumniBodyData.safeParse(request.body);
 
     if (!parsedBody.success) {
@@ -150,11 +161,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   });
 
   fastify.get("/alumni/status", async function (request, reply) {
-    const user = await validateAuthToken(request);
-    if (!user) {
-      reply.status(401);
-      return { error: "Unauthorized" };
-    }
+    const user = request.getDecorator<DecodedIdToken>("user");
 
     const snapshot = await db
       .collection("alumni_registrations")
