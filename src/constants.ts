@@ -17,8 +17,13 @@ export enum Tickets {
   Delegate = 2399,
 }
 
+export enum EventIds {
+  Delegate = 1682,
+}
+
 export const EventMappings: Record<string, string> = {
   "2387": "alumni_registrations",
+  "2399": "delegate_registrations",
 };
 
 export const AllowedTicketIds = process.env["TICKETS"]

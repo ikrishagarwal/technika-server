@@ -265,20 +265,21 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       };
     }
 
-    const userSnap = await db
+    let userSnap = await db
       .collection("delegate_registrations")
       .doc(user.uid)
       .get();
 
     if (!userSnap.exists) {
-      await userSnap.ref.set(
-        {
-          email: user.email,
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
+      await userSnap.ref.set({
+        email: user.email,
+        name: body.data.name,
+        phone: body.data.phone,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      userSnap = await userSnap.ref.get();
     }
 
     const userData = userSnap.data() as DelegateSchema;
@@ -383,6 +384,95 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       status: tiqrData.status,
     };
   });
+
+  fastify.post("/delegate/book-group", async function (request, reply) {
+    const user = request.getDecorator<DecodedIdToken>("user");
+    const body = DelegateBookGroupBody.safeParse(request.body);
+
+    if (!body.success) {
+      reply.code(400);
+      return {
+        error: true,
+        message: "Invalid request body",
+      };
+    }
+
+    let userSnap = await db
+      .collection("delegate_registrations")
+      .doc(user.uid)
+      .get();
+
+    if (!userSnap.exists) {
+      await userSnap.ref.set({
+        email: user.email,
+        name: body.data.leader.name,
+        phone: body.data.leader.phone,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      userSnap = await userSnap.ref.get();
+    }
+
+    const userData = userSnap.data() as DelegateSchema;
+
+    if (
+      userData.group?.paymentStatus === PaymentStatus.Confirmed ||
+      userData.self?.paymentStatus === PaymentStatus.Confirmed
+    ) {
+      reply.code(400);
+      return {
+        error: true,
+        details: "You have already booked as a delegate",
+      };
+    }
+
+    if (userData.group?.paymentStatus) {
+      switch (userData.group.paymentStatus) {
+        case PaymentStatus.PendingPayment:
+          return {
+            success: true,
+            paymentUrl: userData.group.paymentUrl,
+          };
+      }
+    }
+
+    const tiqrResponse = await TiQR.createBooking({
+      first_name: body.data.leader.name.split(" ").at(0)!,
+      last_name: body.data.leader.name.split(" ").slice(1).join(" ") || "",
+      phone_number: body.data.leader.phone,
+      email: user.email ?? "",
+      quantity:
+        body.data.members.length -
+        Math.floor((body.data.members.length + 1) / 6) +
+        1,
+      ticket: Tickets.Delegate,
+      meta_data: {
+        members: body.data.members,
+      },
+    });
+
+    const tiqrData = (await tiqrResponse.json()) as BookingResponse;
+
+    fastify.log.info(tiqrData);
+
+    await userSnap.ref.update({
+      address: body.data.leader.address || "",
+      college: body.data.leader.college || "",
+      group: {
+        tiqrBookingUid: tiqrData.booking.uid,
+        paymentUrl: tiqrData.payment.url_to_redirect || "",
+        paymentStatus: tiqrData.booking.status,
+        members: body.data.members,
+      },
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      paymentUrl: tiqrData.payment.url_to_redirect,
+    };
+  });
 };
 
 const DelegateJoinBody = z.object({
@@ -397,7 +487,28 @@ const DelegateBookSelfBody = z.object({
   callbackUrl: z.string().trim().optional(),
 });
 
-interface DelegateSchema extends Record<string, any> {
+const DelegateBookGroupBody = z.object({
+  leader: z.object({
+    name: z.string().trim().min(1),
+    phone: z.string().trim().min(10),
+    college: z.string().trim(),
+    address: z.string().trim().optional(),
+  }),
+  members: z.array(
+    z.object({
+      name: z.string().trim().min(1),
+      phone: z.string().trim().min(10),
+      email: z.email().trim(),
+    })
+  ),
+});
+
+export interface DelegateSchema extends Record<string, any> {
+  email: string;
+  name: string;
+  phone: string;
+  address?: string;
+  college?: string;
   self?: {
     tiqrBookingUid?: string;
     paymentUrl?: string;
@@ -407,7 +518,11 @@ interface DelegateSchema extends Record<string, any> {
     tiqrBookingUid?: string;
     paymentUrl?: string;
     paymentStatus?: PaymentStatus;
-    user: object;
+    members: Array<{
+      name: string;
+      phone: string;
+      email: string;
+    }>;
   };
   createdAt?: FirebaseFirestore.FieldValue;
   updatedAt?: FirebaseFirestore.FieldValue;
