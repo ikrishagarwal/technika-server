@@ -265,7 +265,10 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       };
     }
 
-    const userSnap = await db.collection("delegates").doc(user.uid).get();
+    const userSnap = await db
+      .collection("delegate_registrations")
+      .doc(user.uid)
+      .get();
 
     if (!userSnap.exists) {
       await userSnap.ref.set(
@@ -278,29 +281,25 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       );
     }
 
-    const userData = userSnap.data() as DelegateUserData;
+    const userData = userSnap.data() as DelegateSchema;
 
-    if (userData.member || userData.owner) {
+    if (
+      userData.self?.paymentStatus === PaymentStatus.Confirmed ||
+      userData.group?.paymentStatus === PaymentStatus.Confirmed
+    ) {
       reply.code(400);
       return {
         error: true,
-        details: "You are already part of a delegate room, cannot book self",
+        details: "You have already booked yourself as a delegate",
       };
     }
 
-    if (userData.selfBooking) {
-      switch (userData.paymentStatus) {
+    if (userData.self?.paymentStatus) {
+      switch (userData.self.paymentStatus) {
         case PaymentStatus.PendingPayment:
           return {
             success: true,
-            paymentUrl: userData.paymentUrl,
-          };
-
-        case PaymentStatus.Confirmed:
-          reply.code(400);
-          return {
-            error: true,
-            details: "You have already booked yourself as a delegate",
+            paymentUrl: userData.self.paymentUrl,
           };
       }
     }
@@ -315,17 +314,19 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         address: body.data.address || "",
         college: body.data.college || "",
       },
+      callback_url: body.data.callbackUrl || "",
     });
 
     const tiqrData = (await tiqrResponse.json()) as BookingResponse;
 
     await userSnap.ref.update({
-      selfBooking: true,
       address: body.data.address,
       college: body.data.college,
-      tiqrBookingUid: tiqrData.booking.uid,
-      paymentUrl: tiqrData.payment.url_to_redirect,
-      paymentStatus: PaymentStatus.PendingPayment,
+      self: {
+        tiqrBookingUid: tiqrData.booking.uid,
+        paymentUrl: tiqrData.payment.url_to_redirect,
+        paymentStatus: PaymentStatus.PendingPayment,
+      },
       updatedAt: FieldValue.serverTimestamp(),
     });
 
@@ -337,7 +338,10 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
 
   fastify.get("/delegate/status-self", async function (request, reply) {
     const user = request.getDecorator<DecodedIdToken>("user");
-    const userSnap = await db.collection("delegates").doc(user.uid).get();
+    const userSnap = await db
+      .collection("delegate_registrations")
+      .doc(user.uid)
+      .get();
 
     if (!userSnap.exists) {
       reply.code(404);
@@ -347,9 +351,9 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       };
     }
 
-    const userData = userSnap.data() as DelegateUserData;
+    const userData = userSnap.data() as DelegateSchema;
 
-    if (!userData.selfBooking || !userData.tiqrBookingUid) {
+    if (!userData.self?.tiqrBookingUid) {
       reply.code(404);
       return {
         error: true,
@@ -357,19 +361,19 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       };
     }
 
-    if (userData.paymentStatus === PaymentStatus.Confirmed) {
+    if (userData.self.paymentStatus === PaymentStatus.Confirmed) {
       return {
         success: true,
         status: PaymentStatus.Confirmed,
       };
     }
 
-    const tiqrResponse = await TiQR.fetchBooking(userData.tiqrBookingUid);
+    const tiqrResponse = await TiQR.fetchBooking(userData.self.tiqrBookingUid);
     const tiqrData = (await tiqrResponse.json()) as BookingData;
 
-    if (tiqrData.status && tiqrData.status !== userData.paymentStatus) {
+    if (tiqrData.status && tiqrData.status !== userData.self.paymentStatus) {
       await userSnap.ref.update({
-        paymentStatus: tiqrData.status,
+        "self.paymentStatus": tiqrData.status,
         updatedAt: FieldValue.serverTimestamp(),
       });
     }
@@ -390,8 +394,24 @@ const DelegateBookSelfBody = z.object({
   name: z.string().trim().min(1),
   address: z.string().trim().optional(),
   college: z.string().trim().optional(),
+  callbackUrl: z.string().trim().optional(),
 });
 
+interface DelegateSchema extends Record<string, any> {
+  self?: {
+    tiqrBookingUid?: string;
+    paymentUrl?: string;
+    paymentStatus?: PaymentStatus;
+  };
+  group?: {
+    tiqrBookingUid?: string;
+    paymentUrl?: string;
+    paymentStatus?: PaymentStatus;
+    user: object;
+  };
+  createdAt?: FirebaseFirestore.FieldValue;
+  updatedAt?: FirebaseFirestore.FieldValue;
+}
 interface DelegateUserData extends Record<string, any> {
   owner?: boolean;
   member?: string;
