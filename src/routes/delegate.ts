@@ -454,8 +454,6 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
 
     const tiqrData = (await tiqrResponse.json()) as BookingResponse;
 
-    fastify.log.info(tiqrData);
-
     await userSnap.ref.update({
       address: body.data.leader.address || "",
       college: body.data.leader.college || "",

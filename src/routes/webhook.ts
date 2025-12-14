@@ -121,7 +121,7 @@ const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
               const tiqrData = (await tiqrResponse.json()) as BookingResponse;
 
               await groupQuery.docs[0].ref.update({
-                "group.complimentaryTiqrBookingUid": tiqrData.booking.uid,
+                "group.complimentaryTiqrBookingUid": tiqrData.uid,
                 "group.paymentStatus": "confirmed",
                 updatedAt: FieldValue.serverTimestamp(),
               });

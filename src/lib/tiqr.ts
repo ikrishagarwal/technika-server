@@ -1,11 +1,11 @@
 import { ApiToken } from "../constants";
 
 export class TiQR {
-  static BASE_URL = "https://api.tiqr.events/";
+  static BASE_URL = "https://api.tiqr.events";
 
   static async createBooking(bookingData: BookingPayload) {
     try {
-      return fetch(`${TiQR.BASE_URL}participant/booking/`, {
+      return fetch(`${TiQR.BASE_URL}/participant/booking/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -21,7 +21,7 @@ export class TiQR {
 
   static async fetchBooking(uid: string) {
     try {
-      return fetch(`${TiQR.BASE_URL}participant/booking/${uid}/`, {
+      return fetch(`${TiQR.BASE_URL}/participant/booking/${uid}/`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -58,6 +58,7 @@ export class TiQR {
 }
 
 export interface BookingResponse {
+  uid: string;
   booking: {
     id: number;
     participant_identification_id: string;
