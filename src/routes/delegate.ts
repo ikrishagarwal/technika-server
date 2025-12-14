@@ -437,6 +437,8 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       }
     }
 
+    if (!body.data.members) body.data.members = [];
+
     const tiqrResponse = await TiQR.createBooking({
       first_name: body.data.leader.name.split(" ").at(0)!,
       last_name: body.data.leader.name.split(" ").slice(1).join(" ") || "",
