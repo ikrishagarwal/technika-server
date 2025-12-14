@@ -540,29 +540,30 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
     }
 
     const userData = userSnap.data() as DelegateSchema;
+    const response = {
+      success: false,
+    } as any;
 
     if (userData.self?.paymentStatus) {
-      return {
-        success: true,
-        isSelf: true,
-        isGroup: false,
-        status: userData.self.paymentStatus,
-      };
-    } else if (userData.group?.paymentStatus) {
-      return {
-        success: true,
-        isSelf: false,
-        isGroup: true,
-        status: userData.group.paymentStatus,
-      };
-    } else {
-      reply.code(404);
-      return {
-        error: true,
-        status: "unregistered",
-        message: "No booking found for user",
-      };
+      response.success = true;
+      response.isSelf = true;
+      response.statusSelf = userData.self.paymentStatus;
     }
+
+    if (userData.group?.paymentStatus) {
+      response.success = true;
+      response.isGroup = true;
+      response.statusGroup = userData.group.paymentStatus;
+    }
+
+    if (response.success) return response;
+
+    reply.code(404);
+    return {
+      error: true,
+      status: "unregistered",
+      message: "No booking found for user",
+    };
   });
 };
 
