@@ -471,6 +471,99 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       paymentUrl: tiqrData.payment.url_to_redirect,
     };
   });
+
+  fastify.get("/delegate/status-group", async function (request, reply) {
+    const user = request.getDecorator<DecodedIdToken>("user");
+
+    const userSnap = await db
+      .collection("delegate_registrations")
+      .doc(user.uid)
+      .get();
+
+    if (!userSnap.exists) {
+      reply.code(404);
+      return {
+        error: true,
+        status: "unregistered",
+        message: "User not registered as delegate",
+      };
+    }
+
+    const userData = userSnap.data() as DelegateSchema;
+    if (!userData.group?.tiqrBookingUid) {
+      reply.code(404);
+      return {
+        error: true,
+        status: "unregistered",
+        message: "No group booking found for user",
+      };
+    }
+
+    if (userData.group.paymentStatus === PaymentStatus.Confirmed) {
+      return {
+        success: true,
+        status: PaymentStatus.Confirmed,
+      };
+    }
+
+    const tiqrResponse = await TiQR.fetchBooking(userData.group.tiqrBookingUid);
+    const tiqrData = (await tiqrResponse.json()) as BookingData;
+
+    if (tiqrData.status && tiqrData.status !== userData.group.paymentStatus) {
+      await userSnap.ref.update({
+        "group.paymentStatus": tiqrData.status,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    return {
+      success: true,
+      status: tiqrData.status,
+    };
+  });
+
+  fastify.get("/delegate/status", async function (request, reply) {
+    const user = request.getDecorator<DecodedIdToken>("user");
+
+    const userSnap = await db
+      .collection("delegate_registrations")
+      .doc(user.uid)
+      .get();
+
+    if (!userSnap.exists) {
+      reply.code(404);
+      return {
+        error: true,
+        status: "unregistered",
+        message: "User not registered as delegate",
+      };
+    }
+
+    const userData = userSnap.data() as DelegateSchema;
+
+    if (userData.self?.paymentStatus) {
+      return {
+        success: true,
+        isSelf: true,
+        isGroup: false,
+        status: userData.self.paymentStatus,
+      };
+    } else if (userData.group?.paymentStatus) {
+      return {
+        success: true,
+        isSelf: false,
+        isGroup: true,
+        status: userData.group.paymentStatus,
+      };
+    } else {
+      reply.code(404);
+      return {
+        error: true,
+        status: "unregistered",
+        message: "No booking found for user",
+      };
+    }
+  });
 };
 
 const DelegateJoinBody = z.object({
