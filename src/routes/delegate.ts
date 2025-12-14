@@ -298,6 +298,22 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
     if (userData.self?.paymentStatus) {
       switch (userData.self.paymentStatus) {
         case PaymentStatus.PendingPayment:
+          const payload = {} as any;
+
+          if (body.data.address !== userData.address)
+            payload["address"] = body.data.address;
+          if (body.data.college !== userData.college)
+            payload["college"] = body.data.college;
+          if (body.data.name !== userData.name)
+            payload["name"] = body.data.name;
+          if (body.data.phone !== userData.phone)
+            payload["phone"] = body.data.phone;
+
+          if (Object.keys(payload).length > 0) {
+            payload["updatedAt"] = FieldValue.serverTimestamp();
+            await userSnap.ref.update(payload);
+          }
+
           return {
             success: true,
             paymentUrl: userData.self.paymentUrl,
@@ -471,6 +487,33 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
     return {
       success: true,
       paymentUrl: tiqrData.payment.url_to_redirect,
+    };
+  });
+
+  fastify.delete("/delegate/group-reset", async function (request, reply) {
+    const user = request.getDecorator<DecodedIdToken>("user");
+    const userSnap = await db
+      .collection("delegate_registrations")
+      .doc(user.uid)
+      .get();
+
+    if (!userSnap.exists) {
+      reply.code(404);
+      return {
+        error: true,
+        message: "User not registered as delegate",
+      };
+    }
+
+    if (userSnap.data()?.group)
+      await userSnap.ref.update({
+        group: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+    return {
+      success: true,
+      message: "Delegate group booking data reset successfully",
     };
   });
 
