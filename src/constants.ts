@@ -18,7 +18,7 @@ export enum Tickets {
 }
 
 export enum EventIds {
-  Delegate = 1682,
+  Delegate = 1683,
 }
 
 export const EventMappings: Record<string, string> = {
