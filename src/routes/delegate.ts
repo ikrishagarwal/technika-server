@@ -162,7 +162,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         updatedAt: FieldValue.serverTimestamp(),
       } as ExtendedDelegateSchema;
 
-      if (!userSnap.exists || userSnap.data()!.createdAt === undefined) {
+      if (!userSnap.exists || userSnap.data()?.createdAt === undefined) {
         updatePayload.createdAt = FieldValue.serverTimestamp();
       }
 
