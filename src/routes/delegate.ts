@@ -177,7 +177,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
     return result;
   });
 
-  fastify.post("/delegate/leave", async function (request, reply) {
+  fastify.delete("/delegate/leave", async function (request, reply) {
     const user = request.getDecorator<DecodedIdToken>("user");
 
     return await db.runTransaction(async (tx) => {
@@ -329,6 +329,111 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       users: roomOwnerData.users ? Object.values(roomOwnerData.users) : null,
       paymentStatus: roomOwnerData.paymentStatus,
       paymentUrl: roomOwnerData.paymentUrl,
+    };
+  });
+
+  fastify.post("/delegate/register/self", async function (request, reply) {
+    const user = request.getDecorator<DecodedIdToken>("user");
+    const body = DelegateBookSelfBody.safeParse(request.body);
+
+    if (!body.success) {
+      reply.code(400);
+      return {
+        error: true,
+        details: "Invalid request body",
+      };
+    }
+
+    const userSnap = await db.collection("delegates").doc(user.uid).get();
+
+    if (userSnap.exists) {
+      const userData = userSnap.data() as ExtendedDelegateSchema;
+
+      if (userData.owner) {
+        reply.code(400);
+        return {
+          error: true,
+          message: "Delete your existing room to register as self",
+        };
+      }
+
+      if (userData.member) {
+        reply.code(400);
+        return {
+          error: true,
+          message: "Leave your existing room to register as self",
+        };
+      }
+
+      if (
+        userData.selfBooking &&
+        userData.paymentStatus === PaymentStatus.Confirmed
+      ) {
+        reply.code(400);
+        return {
+          error: true,
+          message: "You have already registered successfully as a delegate",
+        };
+      }
+
+      if (
+        userData.selfBooking &&
+        userData.paymentStatus === PaymentStatus.PendingPayment
+      ) {
+        const payload = {} as any;
+
+        if (body.data.address !== userData.address)
+          payload.address = body.data.address;
+        if (body.data.college !== userData.college)
+          payload.college = body.data.college;
+        if (body.data.name !== userData.name) payload.name = body.data.name;
+        if (body.data.phone !== userData.phone) payload.phone = body.data.phone;
+
+        if (Object.keys(payload).length > 0) {
+          payload.updatedAt = FieldValue.serverTimestamp();
+        }
+
+        if (Object.keys(payload).length > 0) {
+          await userSnap.ref.update(payload);
+        }
+
+        return {
+          success: true,
+          paymentUrl: userData.paymentUrl,
+        };
+      }
+    }
+
+    const tiqrResponse = await TiQR.createBooking({
+      email: user.email ?? "",
+      first_name: body.data.name.split(" ").at(0)!,
+      last_name: body.data.name.split(" ").slice(1).join(" ") || "",
+      phone_number: body.data.phone,
+      ticket: Tickets.Delegate,
+      meta_data: {
+        address: body.data.address || "",
+        selfBooking: true,
+        college: body.data.college || "",
+      },
+    });
+
+    const tiqrData = (await tiqrResponse.json()) as BookingResponse;
+
+    const payload = {
+      selfBooking: true,
+      tiqrBookingUid: tiqrData.booking.uid,
+      paymentUrl: tiqrData.payment.url_to_redirect || "",
+      paymentStatus: tiqrData.booking.status,
+      updatedAt: FieldValue.serverTimestamp(),
+    } as ExtendedDelegateSchema;
+
+    if (!userSnap.exists) payload.createdAt = FieldValue.serverTimestamp();
+
+    await userSnap.ref.set(payload, { merge: true });
+
+    return {
+      success: true,
+      paymentUrl: tiqrData.payment.url_to_redirect,
     };
   });
 
