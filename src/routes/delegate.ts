@@ -302,6 +302,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
   });
 
   fastify.get("/delegate/status/room/:roomId", async function (request, reply) {
+    const user = request.getDecorator<DecodedIdToken>("user");
     const { roomId } = request.params as { roomId: string };
     const roomSnap = await db
       .collection("delegates")
@@ -317,6 +318,19 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
     }
 
     const roomOwnerData = roomSnap.docs[0].data() as ExtendedDelegateSchema;
+
+    const authorizedUserIds = [
+      roomSnap.docs[0].id,
+      ...Object.keys(roomOwnerData.users || {}),
+    ];
+
+    if (!authorizedUserIds.includes(user.uid)) {
+      reply.code(403);
+      return {
+        error: true,
+        message: "Forbidden: You are not associated with this delegate room",
+      };
+    }
 
     return {
       success: true,
