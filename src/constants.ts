@@ -15,6 +15,8 @@ export enum PaymentStatus {
 export enum Tickets {
   Alumni = 2387,
   Delegate = 2399,
+  GroupEvent = 2412,
+  SoloEvent = 2411,
 }
 
 export enum EventIds {

@@ -5,7 +5,7 @@ import z from "zod";
 import TiQR, { BookingResponse } from "../lib/tiqr";
 import { db } from "../lib/firebase";
 import { FieldValue } from "firebase-admin/firestore";
-import { PaymentStatus } from "../constants";
+import { PaymentStatus, Tickets } from "../constants";
 
 const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
   fastify.decorateRequest("user", null);
@@ -15,7 +15,7 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
     if (!user) {
       return reply.code(401).send({
         error: true,
-        message: "Unauthorized",
+        message: "unauthorized",
       });
     }
 
@@ -35,6 +35,17 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
       };
     }
 
+    if (
+      body.data.type === "group" &&
+      (!body.data.members || body.data.members.length < 1)
+    ) {
+      reply.status(400);
+      return {
+        error: true,
+        message: "Group bookings require at least 2 members",
+      };
+    }
+
     let userSnap = await db
       .collection("event_registrations")
       .doc(user.uid)
@@ -45,6 +56,7 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
         email: user.email,
         name: body.data.name,
         phone: body.data.phone,
+        college: body.data.college,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
@@ -52,28 +64,47 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
       userSnap = await userSnap.ref.get();
     }
 
+    const userData = userSnap.data() as EventSchema;
+
+    if (
+      userData.events &&
+      userData.events[body.data.eventId]?.status === PaymentStatus.Confirmed
+    ) {
+      reply.status(400);
+      return {
+        error: true,
+        message: "You have already registered for this event",
+      };
+    }
+
     const tiqrResponse = await TiQR.createBooking({
       first_name: body.data.name.split(" ")[0],
       last_name: body.data.name.split(" ").slice(1).join(" "),
       phone_number: body.data.phone,
       email: user.email!,
-      ticket: 2398,
+      ticket:
+        body.data.type === "solo" ? Tickets.SoloEvent : Tickets.GroupEvent,
       meta_data: {
         eventId: body.data.eventId,
+        members: body.data.members || [],
       },
     });
 
     const tiqrData = (await tiqrResponse.json()) as BookingResponse;
 
-    fastify.log.info(JSON.stringify(tiqrData, null, 2));
+    const payload = {
+      tiqrBookingUid: tiqrData.booking.uid,
+      status: tiqrData.booking.status,
+      paymentUrl: tiqrData.payment.url_to_redirect || "",
+      type: body.data.type,
+      members: body.data.members || FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    } as EventSchema["events"][number];
+
+    body.data.type === "group" && (payload.members = body.data.members);
 
     await userSnap.ref.update({
-      [`events.${body.data.eventId}`]: {
-        tiqrBookingUid: tiqrData.booking.uid,
-        status: tiqrData.booking.status,
-        paymentUrl: tiqrData.payment.url_to_redirect || "",
-        updatedAt: FieldValue.serverTimestamp(),
-      },
+      [`events.${body.data.eventId}`]: payload,
     });
 
     return {
@@ -149,6 +180,10 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
     return {
       success: true,
       status: tiqrData.booking.status,
+      phone: userData.phone,
+      college: userData.college,
+      name: userData.name,
+      members: userData.events[eventId].members,
       message: "Status fetched successfully",
     };
   });
@@ -186,18 +221,36 @@ const EventBookingPayload = z.object({
   eventId: z.coerce.number(),
   name: z.string().min(1),
   phone: z.string().min(10),
+  college: z.string().min(1),
+  type: z.enum(["solo", "group"]),
+  members: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        phone: z.string().min(10),
+        email: z.string().email(),
+      })
+    )
+    .optional(),
 });
 
 interface EventSchema extends Record<string, any> {
   name: string;
-  phone: string;
   email: string;
+  phone: string;
+  college: string;
   events: Record<
     number,
     {
       tiqrBookingUid: string;
       status: string;
       paymentUrl: string;
+      type: string;
+      members?: Array<{
+        name: string;
+        phone: string;
+        email: string;
+      }>;
     }
   >;
 }
