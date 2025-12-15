@@ -25,6 +25,16 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
 
   fastify.post("/delegate/create", async function (request, reply) {
     const user = request.getDecorator<DecodedIdToken>("user");
+    const body = CreateRoomBody.safeParse(request.body);
+
+    if (!body.success) {
+      reply.code(400);
+      return {
+        error: true,
+        message: "Invalid request body",
+        details: z.prettifyError(body.error),
+      };
+    }
 
     const result = await db.runTransaction(async (tx): Promise<object> => {
       const userRef = db.collection("delegates").doc(user.uid);
@@ -52,9 +62,12 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       const updatePayload = {
         owner: true,
         email: user.email,
+        name: body.data.name,
+        phone: body.data.phone,
+        college: body.data.college,
         roomId,
         updatedAt: FieldValue.serverTimestamp(),
-      } as DelegateUserData;
+      } as ExtendedDelegateSchema;
 
       if (!snapshot.exists || snapshot.data()!.createdAt === undefined) {
         updatePayload.createdAt = FieldValue.serverTimestamp();
@@ -73,7 +86,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
 
   fastify.post("/delegate/join", async function (request, reply) {
     const user = request.getDecorator<DecodedIdToken>("user");
-    const body = DelegateJoinBody.safeParse(request.body);
+    const body = JoinRoomBody.safeParse(request.body);
 
     if (!body.success) {
       reply.code(400);
@@ -90,7 +103,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       const userSnap = await tx.get(userRef);
 
       if (userSnap.exists) {
-        const userData = userSnap.data() as DelegateUserData;
+        const userData = userSnap.data() as ExtendedDelegateSchema;
 
         if (userData.member) {
           if (userData.member === roomId) {
@@ -131,15 +144,23 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       }
 
       tx.update(roomSnap.docs[0].ref, {
-        [`users.${user.uid}`]: user.email,
+        [`users.${user.uid}`]: {
+          email: user.email,
+          name: body.data.name,
+          phone: body.data.phone,
+          college: body.data.college,
+        },
         updatedAt: FieldValue.serverTimestamp(),
       });
 
       const updatePayload = {
         email: user.email,
+        name: body.data.name,
+        phone: body.data.phone,
+        college: body.data.college,
         member: roomId,
         updatedAt: FieldValue.serverTimestamp(),
-      } as DelegateUserData;
+      } as ExtendedDelegateSchema;
 
       if (!userSnap.exists || userSnap.data()!.createdAt === undefined) {
         updatePayload.createdAt = FieldValue.serverTimestamp();
@@ -253,6 +274,66 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
     });
   });
 
+  fastify.get("/delegate/status/user", async function (request, reply) {
+    const user = request.getDecorator<DecodedIdToken>("user");
+    const userSnap = await db.collection("delegate").doc(user.uid).get();
+
+    if (!userSnap.exists) {
+      reply.code(404);
+      return {
+        error: true,
+        isOwner: false,
+        isMember: false,
+      };
+    }
+
+    const userData = userSnap.data() as ExtendedDelegateSchema;
+
+    return {
+      success: true,
+      isOwner: Boolean(userData.owner),
+      isMember: Boolean(userData.member),
+      roomId: userData.roomId,
+      selfBooking: Boolean(userData.selfBooking),
+      paymentStatus: userData.paymentStatus,
+      paymentUrl: userData.paymentUrl,
+      users: userData.users ? Object.values(userData.users) : null,
+    };
+  });
+
+  fastify.get("/delegate/status/room/:roomId", async function (request, reply) {
+    const { roomId } = request.params as { roomId: string };
+    const roomSnap = await db
+      .collection("delegates")
+      .where("roomId", "==", roomId)
+      .get();
+
+    if (roomSnap.empty) {
+      reply.code(404);
+      return {
+        error: true,
+        message: "Delegate room not found",
+      };
+    }
+
+    const roomOwnerData = roomSnap.docs[0].data() as ExtendedDelegateSchema;
+
+    return {
+      success: true,
+      owner: {
+        name: roomOwnerData.name,
+        email: roomOwnerData.email,
+        phone: roomOwnerData.phone,
+        college: roomOwnerData.college,
+      },
+      users: roomOwnerData.users ? Object.values(roomOwnerData.users) : null,
+      paymentStatus: roomOwnerData.paymentStatus,
+      paymentUrl: roomOwnerData.paymentUrl,
+    };
+  });
+
+  // LEGACY ENDPOINTS
+  // Keeping them untouched for backward compatibility
   fastify.post("/delegate/book-self", async function (request, reply) {
     const user = request.getDecorator<DecodedIdToken>("user");
     const body = DelegateBookSelfBody.safeParse(request.body);
@@ -612,7 +693,16 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
   });
 };
 
-const DelegateJoinBody = z.object({
+const CreateRoomBody = z.object({
+  name: z.string().trim().min(1),
+  phone: z.string().trim().min(10),
+  college: z.string().trim().min(1),
+});
+
+const JoinRoomBody = z.object({
+  name: z.string().trim().min(1),
+  phone: z.string().trim().min(10),
+  college: z.string().trim().min(1),
   roomId: z.string().trim().length(15),
 });
 
@@ -664,13 +754,21 @@ export interface DelegateSchema extends Record<string, any> {
   createdAt?: FirebaseFirestore.FieldValue;
   updatedAt?: FirebaseFirestore.FieldValue;
 }
-interface DelegateUserData extends Record<string, any> {
+interface ExtendedDelegateSchema extends Record<string, any> {
   owner?: boolean;
   member?: string;
   roomId?: string;
   createdAt?: FirebaseFirestore.FieldValue;
   updatedAt?: FirebaseFirestore.FieldValue;
-  users?: Record<string, string>;
+  users?: Record<
+    string,
+    {
+      name: string;
+      email: string;
+      phone: string;
+      college: string;
+    }
+  >;
   selfBooking?: boolean;
   tiqrBookingUid?: string;
   paymentUrl?: string;
