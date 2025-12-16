@@ -75,6 +75,25 @@ const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
         });
         break;
 
+      case Tickets.Accommodation:
+        const accommodationEntry = await db
+          .collection(collectionName)
+          .where("tiqrBookingUid", "==", body.booking_uid)
+          .get();
+
+        if (accommodationEntry.empty) {
+          fastify.log.warn(
+            `No matching accommodation entry found for booking UID: ${body.booking_uid}`
+          );
+          return reply.code(204).send();
+        }
+
+        await accommodationEntry.docs[0].ref.update({
+          paymentStatus: body.booking_status,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        break;
+
       case Tickets.Delegate:
         const selfQuery = await db
           .collection(collectionName)

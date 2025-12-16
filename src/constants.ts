@@ -18,6 +18,8 @@ export enum Tickets {
   DelegateComplimentary = 2416,
   GroupEvent = 2412,
   SoloEvent = 2411,
+  // Update the accommodation ticket when confirmed
+  Accommodation = 0,
 }
 
 export enum EventIds {
@@ -27,6 +29,8 @@ export enum EventIds {
 export const EventMappings: Record<string, string> = {
   "2387": "alumni_registrations",
   "2399": "delegate_registrations",
+  // Update the accommodation ticket when confirmed
+  "0": "accommodation",
 };
 
 export const AllowedTicketIds = process.env["TICKETS"]
