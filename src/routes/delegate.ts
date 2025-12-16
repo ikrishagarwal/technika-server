@@ -5,7 +5,12 @@ import { HttpError, uuid } from "../lib/utils";
 import { db } from "../lib/firebase";
 import z from "zod";
 import { FieldValue } from "firebase-admin/firestore";
-import TiQR, { BookingData, BookingResponse } from "../lib/tiqr";
+import TiQR, {
+  BookingData,
+  BookingPayload,
+  BookingResponse,
+  BulkBookingResponse,
+} from "../lib/tiqr";
 import { PaymentStatus, Tickets } from "../constants";
 
 const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
@@ -41,7 +46,18 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       const snapshot = await tx.get(userRef);
 
       if (snapshot.exists) {
-        const data = snapshot.data()!;
+        const data = snapshot.data() as ExtendedDelegateSchema;
+
+        if (
+          data.selfBooking &&
+          data.paymentStatus === PaymentStatus.Confirmed
+        ) {
+          throw new HttpError(
+            400,
+            "User has already registered as a self-booking delegate"
+          );
+        }
+
         if (data.member) {
           throw new HttpError(
             400,
@@ -105,6 +121,16 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       if (userSnap.exists) {
         const userData = userSnap.data() as ExtendedDelegateSchema;
 
+        if (
+          userData.selfBooking &&
+          userData.paymentStatus === PaymentStatus.Confirmed
+        ) {
+          throw new HttpError(
+            400,
+            "User has already registered as a self-booking delegate"
+          );
+        }
+
         if (userData.member) {
           if (userData.member === roomId) {
             return {
@@ -133,8 +159,13 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         throw new HttpError(404, "Delegate room not found");
       }
 
-      const roomData = roomSnap.docs[0].data();
-      const existingUsers = roomData.users as Record<string, string> | null;
+      const roomData = roomSnap.docs[0].data() as ExtendedDelegateSchema;
+
+      if (roomData.paymentStatus === PaymentStatus.Confirmed) {
+        throw new HttpError(400, "Can't join an already registered room.");
+      }
+
+      const existingUsers = roomData.users;
 
       if (existingUsers && existingUsers[user.uid]) {
         return {
@@ -191,18 +222,30 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         };
       }
 
-      if (snapshot.data()!.owner) {
+      const userData = snapshot.data() as ExtendedDelegateSchema;
+
+      if (
+        !userData.selfBooking &&
+        userData.paymentStatus === PaymentStatus.Confirmed
+      ) {
+        throw new HttpError(
+          400,
+          "Can't leave a room after successful registration"
+        );
+      }
+
+      if (userData.owner) {
         throw new HttpError(400, "User is a room owner");
       }
 
-      if (!snapshot.data()!.member) {
+      if (!userData.member) {
         return {
           success: true,
           message: "User is not part of any delegate room",
         };
       }
 
-      const roomId = snapshot.data()!.member;
+      const roomId = userData.member;
 
       const roomQuery = db
         .collection("delegates")
@@ -245,6 +288,13 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
           success: true,
           message: "User isn't a room owner already",
         };
+      }
+
+      if (userSnap.data()!.paymentStatus === PaymentStatus.Confirmed) {
+        throw new HttpError(
+          400,
+          "Can't delete a room after successful registration"
+        );
       }
 
       const roomId = userSnap.data()!.roomId;
@@ -398,9 +448,12 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
 
         if (body.data.address !== userData.address)
           payload.address = body.data.address;
+
         if (body.data.college !== userData.college)
           payload.college = body.data.college;
+
         if (body.data.name !== userData.name) payload.name = body.data.name;
+
         if (body.data.phone !== userData.phone) payload.phone = body.data.phone;
 
         if (Object.keys(payload).length > 0) {
@@ -449,6 +502,121 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       success: true,
       paymentUrl: tiqrData.payment.url_to_redirect,
     };
+  });
+
+  fastify.post("/delegate/register/group", async function (request, reply) {
+    const user = request.getDecorator<DecodedIdToken>("user");
+
+    return db.runTransaction(async (tx) => {
+      const userRef = await tx.get(db.collection("delegates").doc(user.uid));
+
+      if (!userRef.exists) {
+        throw new HttpError(400, "You don't own a room");
+      }
+
+      const userData = userRef.data() as ExtendedDelegateSchema;
+
+      if (
+        userData.selfBooking &&
+        userData.paymentStatus === PaymentStatus.Confirmed
+      ) {
+        throw new HttpError(
+          400,
+          "You already have a self registrations to proceed with group registration"
+        );
+      }
+
+      if (!userData.owner || !userData.roomId) {
+        throw new HttpError(400, "You don't own a room to make a registration");
+      }
+
+      if (
+        !userData.selfBooking &&
+        userData.paymentStatus === PaymentStatus.Confirmed
+      ) {
+        return {
+          success: true,
+          status: PaymentStatus.Confirmed,
+          message: "You have already registered successfully as a delegate",
+        };
+      }
+
+      const members = await tx.get(
+        db.collection("delegates").where("member", "==", userData.roomId)
+      );
+
+      if (members.docs.length !== Object.keys(userData.users || {}).length) {
+        throw new HttpError(400, "There's a mismatch in room members data");
+      }
+
+      const dbPayload: ExtendedDelegateSchema = {
+        selfBooking: false,
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      const bookingPayload: BookingPayload[] = [
+        {
+          first_name: userData.name.split(" ").at(0)!,
+          last_name: userData.name.split(" ").slice(1).join(" ") || "",
+          email: user.email ?? "",
+          phone_number: userData.phone,
+          ticket: Tickets.Delegate,
+        },
+      ];
+
+      userData.users &&
+        Object.values(userData.users).forEach((member, i) => {
+          const payload: BookingPayload = {
+            first_name: member.name.split(" ").at(0)!,
+            last_name: member.name.split(" ").slice(1).join(" ") || "",
+            email: member.email,
+            ticket: Tickets.Delegate,
+            phone_number: member.phone,
+            meta_data: {
+              uid: Object.keys(userData.users!)[i],
+            },
+          };
+
+          if ((i + 1) % 6 === 0) payload.ticket = Tickets.DelegateComplimentary;
+
+          bookingPayload.push(payload);
+        });
+
+      const tiqrBookingData = await TiQR.createBooking({
+        bookings: bookingPayload,
+      });
+
+      const tiqrData = (await tiqrBookingData.json()) as BulkBookingResponse;
+
+      dbPayload.tiqrBookingUid = tiqrData.booking.uid;
+      dbPayload.paymentUrl = tiqrData.payment.url_to_redirect || "";
+      dbPayload.paymentStatus = tiqrData.booking.status as PaymentStatus;
+
+      tx.update(userRef.ref, dbPayload);
+
+      for (const childBooking of tiqrData.booking.child_bookings) {
+        if (!childBooking.meta_data?.uid)
+          throw new HttpError(400, "Enable to register, try again.");
+
+        const memberSnap = await tx.get(
+          db.collection("delegates").doc(childBooking.meta_data.uid)
+        );
+        if (!memberSnap.exists)
+          throw new HttpError(400, "One of the members does not exist");
+
+        tx.update(memberSnap.ref, {
+          selfBooking: false,
+          tiqrBookingUid: childBooking.uid,
+          paymentStatus: childBooking.status as PaymentStatus,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      return {
+        success: true,
+        paymentUrl: tiqrData.payment.url_to_redirect,
+      };
+    });
   });
 
   // LEGACY ENDPOINTS
