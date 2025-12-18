@@ -6,6 +6,7 @@ import TiQR, { BookingResponse } from "../lib/tiqr";
 import { db } from "../lib/firebase";
 import { FieldValue } from "firebase-admin/firestore";
 import { PaymentStatus, Tickets } from "../constants";
+import { isBitEmail } from "../lib/utils";
 
 const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
   fastify.decorateRequest("user", null);
@@ -74,6 +75,74 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
       return {
         error: true,
         message: "You have already registered for this event",
+      };
+    }
+
+    if (body.data.isBitStudent && user.email && isBitEmail(user.email)) {
+      const payload = {
+        isBitStudent: true,
+        status: PaymentStatus.Confirmed,
+        paymentUrl: "",
+        type: body.data.type,
+        members: body.data.members || FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      } as Partial<EventSchema["events"][number]>;
+
+      body.data.type === "group" && (payload.members = body.data.members);
+
+      await userSnap.ref.update({
+        [`events.${body.data.eventId}`]: payload,
+      });
+
+      return {
+        success: true,
+        message: "Booking created successfully",
+      };
+    } else if (body.data.isBitStudent) {
+      reply.status(403);
+      return {
+        error: true,
+        message: "Invalid BIT email address",
+      };
+    }
+
+    if (body.data.isDelegate) {
+      const delegateUser = await db.collection("delegate").doc(user.uid).get();
+
+      if (!delegateUser.exists) {
+        reply.status(403);
+        return {
+          error: true,
+          message: "You are not registered as a delegate",
+        };
+      }
+
+      if (delegateUser.data()!.paymentStatus != PaymentStatus.Confirmed) {
+        reply.status(403);
+        return {
+          error: true,
+          message: "Your delegate registration is not confirmed",
+        };
+      }
+
+      const payload = {
+        isDelegate: true,
+        status: PaymentStatus.Confirmed,
+        paymentUrl: "",
+        type: body.data.type,
+        members: body.data.members || FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      } as Partial<EventSchema["events"][number]>;
+
+      body.data.type === "group" && (payload.members = body.data.members);
+
+      await userSnap.ref.update({
+        [`events.${body.data.eventId}`]: payload,
+      });
+
+      return {
+        success: true,
+        message: "Booking created successfully",
       };
     }
 
@@ -157,6 +226,12 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
       reply.code(200);
       return {
         success: true,
+        isBitStudent: userData.isBitStudent || false,
+        isDelegate: userData.isDelegate || false,
+        phone: userData.phone,
+        college: userData.college,
+        name: userData.name,
+        members: userData.events[eventId].members,
         status: PaymentStatus.Confirmed,
         message: "Registration confirmed",
       };
@@ -179,6 +254,8 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
 
     return {
       success: true,
+      isBitStudent: userData.isBitStudent || false,
+      isDelegate: userData.isDelegate || false,
       status: tiqrData.booking.status,
       phone: userData.phone,
       college: userData.college,
@@ -223,6 +300,8 @@ const EventBookingPayload = z.object({
   phone: z.string().min(10),
   college: z.string().min(1),
   type: z.enum(["solo", "group"]),
+  isBitStudent: z.boolean().optional(),
+  isDelegate: z.boolean().optional(),
   members: z
     .array(
       z.object({
@@ -239,6 +318,8 @@ interface EventSchema extends Record<string, any> {
   email: string;
   phone: string;
   college: string;
+  isBitStudent?: boolean;
+  isDelegate?: boolean;
   events: Record<
     number,
     {

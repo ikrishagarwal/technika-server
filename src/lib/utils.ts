@@ -16,3 +16,7 @@ export class HttpError extends Error {
     this.error = error;
   }
 }
+
+export function isBitEmail(email: string): boolean {
+  return /^[a-z]+15[0-9]{3}\.[12][0-9]@bitmesra\.ac\.in$/.test(email);
+}
