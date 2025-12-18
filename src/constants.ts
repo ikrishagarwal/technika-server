@@ -21,13 +21,9 @@ export enum Tickets {
   Accommodation = 2440,
 }
 
-export enum EventIds {
-  Delegate = 1683,
-}
-
 export const EventMappings: Record<string, string> = {
   "2387": "alumni_registrations",
-  "2399": "delegate_registrations",
+  "2399": "delegate",
   "2440": "accommodation",
 };
 
@@ -37,3 +33,8 @@ export const AllowedTicketIds = process.env["TICKETS"]
       .map((t) => Number(t))
       .filter((t) => !isNaN(t))
   : [];
+
+// LEGACY
+// export enum EventIds {
+//   Delegate = 1683,
+// }

@@ -36,27 +36,28 @@ export class TiQR {
     }
   }
 
-  static async bookComplimentary(eventId: number, payload: BookingPayload) {
-    try {
-      return await fetch(
-        `${TiQR.BASE_URL}/organiser/event/${eventId}/booking/`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${ApiToken}`,
-          },
-          body: JSON.stringify({
-            booking_type: "complimentary",
-            ...payload,
-          }),
-        }
-      );
-    } catch (error) {
-      console.error("Error fetching booking:", error);
-      throw error;
-    }
-  }
+  // LEGACY
+  // static async bookComplimentary(eventId: number, payload: BookingPayload) {
+  //   try {
+  //     return await fetch(
+  //       `${TiQR.BASE_URL}/organiser/event/${eventId}/booking/`,
+  //       {
+  //         method: "POST",
+  //         headers: {
+  //           "Content-Type": "application/json",
+  //           Authorization: `Bearer ${ApiToken}`,
+  //         },
+  //         body: JSON.stringify({
+  //           booking_type: "complimentary",
+  //           ...payload,
+  //         }),
+  //       }
+  //     );
+  //   } catch (error) {
+  //     console.error("Error fetching booking:", error);
+  //     throw error;
+  //   }
+  // }
 }
 
 export interface BookingResponse {
