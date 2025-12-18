@@ -16,8 +16,10 @@ export enum Tickets {
   Alumni = 2387,
   Delegate = 2399,
   DelegateComplimentary = 2416,
-  GroupEvent = 2454,
-  SoloEvent = 2453,
+  TechnicalGroup = 2454,
+  TechnicalSolo = 2453,
+  CulturalSolo = 2455,
+  CulturalGroup = 2456,
   Accommodation = 2440,
 }
 

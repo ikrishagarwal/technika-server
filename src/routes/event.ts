@@ -152,7 +152,13 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
       phone_number: body.data.phone,
       email: user.email!,
       ticket:
-        body.data.type === "solo" ? Tickets.SoloEvent : Tickets.GroupEvent,
+        body.data.eventId < 100
+          ? body.data.type === "solo"
+            ? Tickets.TechnicalSolo
+            : Tickets.TechnicalGroup
+          : body.data.type === "solo"
+          ? Tickets.CulturalSolo
+          : Tickets.CulturalGroup,
       meta_data: {
         eventId: body.data.eventId,
         members: body.data.members || [],
