@@ -1,12 +1,10 @@
 ![Cover Image](https://tiqr.events/_next/image/?url=https%3A%2F%2Ftiqr-events.sgp1.cdn.digitaloceanspaces.com%2Ftiqr-events%2Fmedia%2Fimages%2F6346d159dd464de0ac14b03a1460c92c-technika_16_x_9_in.png&w=1920&q=75)
 
-<center>
-
-![GitHub commit activity](https://img.shields.io/github/commit-activity/t/ikrishagarwal/technika-server)
-![Git Last Commit](https://img.shields.io/github/last-commit/ikrishagarwal/technika-server)
-![Uptime Robot status](https://img.shields.io/uptimerobot/status/m801916595-5ce31760bdd16adce6d296e8)
-
-</center>
+<p align="center">
+  <img src="https://img.shields.io/github/commit-activity/t/ikrishagarwal/technika-server" alt="Commits">
+  <img src="https://img.shields.io/github/last-commit/ikrishagarwal/technika-server" alt="Last Commit">
+  <img src="https://img.shields.io/uptimerobot/status/m801916595-5ce31760bdd16adce6d296e8" alt="uptime">
+</p>
 
 # Server for Technika 25
 
