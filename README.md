@@ -2,7 +2,9 @@
 
 <center>
 
-![GitHub commit activity](https://img.shields.io/github/commit-activity/:interval/ikrishagarwal/technika-server)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/t/ikrishagarwal/technika-server)
+![Git Last Commit](https://img.shields.io/github/last-commit/ikrishagarwal/technika-server)
+![Uptime Robot status](https://img.shields.io/uptimerobot/status/m801916595-5ce31760bdd16adce6d296e8)
 
 </center>
 
