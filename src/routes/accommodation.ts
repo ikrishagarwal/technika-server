@@ -5,7 +5,7 @@ import z from "zod";
 import { PaymentStatus, Tickets } from "../constants";
 import { validateAuthToken } from "../lib/auth";
 import { db } from "../lib/firebase";
-import TiQR, { BookingResponse } from "../lib/tiqr";
+import TiQR, { BookingData, BookingResponse } from "../lib/tiqr";
 
 const Accommodation: FastifyPluginAsync = async (fastify): Promise<void> => {
   fastify.decorateRequest("user", null);
@@ -72,6 +72,8 @@ const Accommodation: FastifyPluginAsync = async (fastify): Promise<void> => {
 
     const payload = {
       tiqrBookingUid: tiqrData.booking.uid,
+      checkIn: body.data.checkIn,
+      checkOut: body.data.checkOut,
       paymentStatus: tiqrData.booking.status,
       paymentUrl: tiqrData.payment.url_to_redirect || "",
       updatedAt: FieldValue.serverTimestamp(),
@@ -113,30 +115,34 @@ const Accommodation: FastifyPluginAsync = async (fastify): Promise<void> => {
       reply.code(200);
       return {
         success: true,
+        phone: userData.phone,
+        college: userData.college,
+        name: userData.name,
+        checkIn: userData.checkIn,
+        checkOut: userData.checkOut,
         status: PaymentStatus.Confirmed,
         message: "Registration confirmed",
       };
     }
 
     const tiqrResponse = await TiQR.fetchBooking(userData.tiqrBookingUid);
-    const tiqrData = (await tiqrResponse.json()) as BookingResponse;
+    const tiqrData = (await tiqrResponse.json()) as BookingData;
 
-    if (
-      tiqrData.booking.status &&
-      tiqrData.booking.status !== userData.paymentStatus
-    ) {
+    if (tiqrData.status && tiqrData.status !== userData.paymentStatus) {
       await userSnap.ref.update({
-        paymentStatus: tiqrData.booking.status,
+        paymentStatus: tiqrData.status,
         updatedAt: FieldValue.serverTimestamp(),
       });
     }
 
     return {
       success: true,
-      status: tiqrData.booking.status,
+      status: tiqrData.status,
       phone: userData.phone,
       college: userData.college,
       name: userData.name,
+      checkIn: userData.checkIn,
+      checkOut: userData.checkOut,
       message: "Status fetched successfully",
     };
   });
@@ -146,6 +152,8 @@ const AccommodationBookingPayload = z.object({
   name: z.string().min(1),
   phone: z.string().min(10),
   college: z.string().min(1),
+  checkIn: z.string().optional(),
+  checkOut: z.string().optional(),
 });
 
 interface AccommodationSchema extends Record<string, any> {
@@ -153,6 +161,8 @@ interface AccommodationSchema extends Record<string, any> {
   email: string;
   phone: string;
   college: string;
+  checkIn?: string;
+  checkOut?: string;
   tiqrBookingUid?: string;
   paymentStatus?: PaymentStatus;
   createdAt: FirebaseFirestore.FieldValue;
