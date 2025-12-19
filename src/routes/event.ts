@@ -78,17 +78,22 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
       };
     }
 
-    if (body.data.isBitStudent && user.email && isBitEmail(user.email)) {
-      const payload = {
-        isBitStudent: true,
-        status: PaymentStatus.Confirmed,
-        paymentUrl: "",
-        type: body.data.type,
-        members: body.data.members || FieldValue.delete(),
-        updatedAt: FieldValue.serverTimestamp(),
-      } as Partial<EventSchema["events"][number]>;
+    const payload = {
+      type: body.data.type,
+      updatedAt: FieldValue.serverTimestamp(),
+    } as Partial<EventSchema["events"][number]>;
 
-      body.data.type === "group" && (payload.members = body.data.members);
+    if (
+      body.data.members &&
+      body.data.type === "group" &&
+      body.data.members.length > 0
+    )
+      payload.members = body.data.members;
+
+    if (body.data.isBitStudent && user.email && isBitEmail(user.email)) {
+      payload.isBitStudent = true;
+      payload.status = PaymentStatus.Confirmed;
+      payload.paymentUrl = "";
 
       await userSnap.ref.update({
         [`events.${body.data.eventId}`]: payload,
@@ -125,16 +130,9 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
         };
       }
 
-      const payload = {
-        isDelegate: true,
-        status: PaymentStatus.Confirmed,
-        paymentUrl: "",
-        type: body.data.type,
-        members: body.data.members || FieldValue.delete(),
-        updatedAt: FieldValue.serverTimestamp(),
-      } as Partial<EventSchema["events"][number]>;
-
-      body.data.type === "group" && (payload.members = body.data.members);
+      payload.isDelegate = true;
+      payload.status = PaymentStatus.Confirmed;
+      payload.paymentUrl = "";
 
       await userSnap.ref.update({
         [`events.${body.data.eventId}`]: payload,
@@ -167,16 +165,9 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
 
     const tiqrData = (await tiqrResponse.json()) as BookingResponse;
 
-    const payload = {
-      tiqrBookingUid: tiqrData.booking.uid,
-      status: tiqrData.booking.status,
-      paymentUrl: tiqrData.payment.url_to_redirect || "",
-      type: body.data.type,
-      members: body.data.members || FieldValue.delete(),
-      updatedAt: FieldValue.serverTimestamp(),
-    } as EventSchema["events"][number];
-
-    body.data.type === "group" && (payload.members = body.data.members);
+    payload.tiqrBookingUid = tiqrData.booking.uid;
+    payload.status = tiqrData.booking.status;
+    payload.paymentUrl = tiqrData.payment.url_to_redirect || "";
 
     await userSnap.ref.update({
       [`events.${body.data.eventId}`]: payload,
@@ -324,8 +315,6 @@ interface EventSchema extends Record<string, any> {
   email: string;
   phone: string;
   college: string;
-  isBitStudent?: boolean;
-  isDelegate?: boolean;
   events: Record<
     number,
     {
@@ -333,6 +322,8 @@ interface EventSchema extends Record<string, any> {
       status: string;
       paymentUrl: string;
       type: string;
+      isBitStudent?: boolean;
+      isDelegate?: boolean;
       members?: Array<{
         name: string;
         phone: string;
