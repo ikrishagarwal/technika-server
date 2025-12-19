@@ -115,6 +115,32 @@ const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
 
       case Tickets.TechnicalSolo:
       case Tickets.CulturalSolo:
+        if (!tiqrData.meta_data || !tiqrData.meta_data.eventId) {
+          fastify.log.warn(
+            `No eventId found in meta_data for booking UID: ${body.booking_uid}`
+          );
+          return reply.code(204).send();
+        }
+
+        const eventUser = await db
+          .collection(collectionName)
+          .where(
+            `${tiqrData.meta_data.eventId}.tiqrBookingUid`,
+            "==",
+            body.booking_uid
+          )
+          .get();
+
+        if (eventUser.empty) {
+          fastify.log.warn(
+            `No matching event entry found for booking UID: ${body.booking_uid}`
+          );
+          return reply.code(204).send();
+        }
+
+        await eventUser.docs[0].ref.update({
+          [`events.${tiqrData.meta_data.eventId}.status`]: body.booking_status,
+        });
         break;
 
       // LEGACY CODE FOR OLD WAY OF HANDLING DELEGATE REGISTRATIONS
