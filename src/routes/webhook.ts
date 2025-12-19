@@ -113,6 +113,10 @@ const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
         });
         break;
 
+      case Tickets.TechnicalSolo:
+      case Tickets.CulturalSolo:
+        break;
+
       // LEGACY CODE FOR OLD WAY OF HANDLING DELEGATE REGISTRATIONS
       // KEEPING IT COMMENTED FOR NOW IN CASE WE NEED TO REVERT
 
