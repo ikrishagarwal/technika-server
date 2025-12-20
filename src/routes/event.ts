@@ -5,7 +5,11 @@ import z from "zod";
 import TiQR, { BookingResponse } from "../lib/tiqr";
 import { db } from "../lib/firebase";
 import { FieldValue } from "firebase-admin/firestore";
-import { PaymentStatus, Tickets } from "../constants";
+import {
+  EventIdToPriceMap,
+  PaymentStatus,
+  TicketPriceToIdMap,
+} from "../constants";
 import { isBitEmail } from "../lib/utils";
 
 const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
@@ -44,6 +48,28 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
       return {
         error: true,
         message: "Group bookings require at least 2 members",
+      };
+    }
+
+    const eventPrice =
+      EventIdToPriceMap[body.data.eventId as keyof typeof EventIdToPriceMap];
+
+    if (!eventPrice) {
+      reply.status(400);
+      return {
+        error: true,
+        message: "This event doesn't need a ticket",
+      };
+    }
+
+    const eventTicketId =
+      TicketPriceToIdMap[eventPrice as keyof typeof TicketPriceToIdMap];
+
+    if (!eventTicketId) {
+      reply.status(400);
+      return {
+        error: true,
+        message: "This event isn't open for registrations",
       };
     }
 
@@ -149,9 +175,7 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
       last_name: body.data.name.split(" ").slice(1).join(" "),
       phone_number: body.data.phone,
       email: user.email!,
-      ticket:
-        body.data.eventId < 100 ? Tickets.TechnicalSolo : Tickets.CulturalSolo,
-      quantity: body.data.type === "solo" ? 1 : body.data.members!.length + 1,
+      ticket: eventTicketId,
       meta_data: {
         eventId: body.data.eventId,
         members: body.data.members || [],

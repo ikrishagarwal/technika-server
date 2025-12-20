@@ -16,10 +16,10 @@ export enum Tickets {
   Alumni = 2387,
   Delegate = 2399,
   DelegateComplimentary = 2416,
-  TechnicalSolo = 2454,
+  // TechnicalSolo = 2454,
   // TechnicalSolo = 2453,
-  CulturalSolo = 2455,
-  CulturalGroup = 2456,
+  // CulturalSolo = 2455,
+  // CulturalGroup = 2456,
   Accommodation = 2440,
 }
 
@@ -35,6 +35,69 @@ export const AllowedTicketIds = process.env["TICKETS"]
       .map((t) => Number(t))
       .filter((t) => !isNaN(t))
   : [];
+
+export const TicketPriceToIdMap = {
+  199: 2454,
+  149: 2455,
+  299: 2456,
+  399: 2463,
+  599: 2460,
+  499: 2457,
+  249: 2458,
+  699: 2459,
+};
+
+export const EventTickets = Object.values(TicketPriceToIdMap);
+
+export const EventIdToPriceMap = {
+  // Technical
+  1: 499, // hackathon
+  2: 199, // cp
+  3: 199, // ampere_assemble
+  4: 499, // robo_war
+  5: 499, // robo_soccer
+  6: 499, // robo_race
+  7: 199, // tall_tower
+  8: 199, // bridge_the_gap
+  9: 199, // multisim_mavericks
+  10: 149, // startup_sphere
+  11: 199, // cad_modelling
+  12: 199, // brain_brawl
+  13: 199, // utility_bot
+
+  // Cultural
+  101: 149, // solo_saga
+  102: 699, // exuberance
+  103: 249, // synced_showdown
+  104: 149, // raag_unreleased
+  105: 299, // fusion_fiesta
+  106: 199, // musical_marvel
+  107: 149, // ekanki
+  108: 599, // matargasthi
+  109: 699, // hulchul
+  110: 149, // poetry
+  111: 149, // kavi_sammelan
+  112: 149, // debate
+  113: 399, // fashion_insta
+
+  // Cultural (new)
+  115: 149, // street_dance
+  116: 149, // pencil_perfection
+  117: 149, // wall_painting
+
+  // Frame & Focus
+  118: undefined, // motion_e_magic (price not confirmed)
+  119: undefined, // capture_the_unseen (price not confirmed)
+
+  // Fun
+  201: undefined, // escape_room (on-spot / not fixed)
+
+  // ESports
+  301: 249, // bgmi
+  302: 249, // valorant
+  303: undefined, // fifa (on-spot)
+  304: undefined, // tekken (on-spot)
+};
 
 // LEGACY
 // export enum EventIds {
