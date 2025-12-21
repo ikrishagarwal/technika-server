@@ -2,7 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import { validateAuthToken } from "../lib/auth";
 import { DecodedIdToken } from "firebase-admin/auth";
 import z from "zod";
-import TiQR, { BookingResponse } from "../lib/tiqr";
+import TiQR, { BookingResponse, FetchBookingResponse } from "../lib/tiqr";
 import { db } from "../lib/firebase";
 import { FieldValue } from "firebase-admin/firestore";
 import {
@@ -256,14 +256,14 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
     const tiqrResponse = await TiQR.fetchBooking(
       userData.events[eventId].tiqrBookingUid
     );
-    const tiqrData = (await tiqrResponse.json()) as BookingResponse;
+    const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
 
     if (
-      tiqrData.booking.status &&
-      tiqrData.booking.status !== userData.events[eventId].status
+      tiqrData.status &&
+      tiqrData.status !== userData.events[eventId].status
     ) {
       await userSnap.ref.update({
-        [`events.${eventId}.status`]: tiqrData.booking.status,
+        [`events.${eventId}.status`]: tiqrData.status,
         updatedAt: FieldValue.serverTimestamp(),
       });
     }
@@ -272,7 +272,7 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
       success: true,
       isBitStudent: userData.isBitStudent || false,
       isDelegate: userData.isDelegate || false,
-      status: tiqrData.booking.status,
+      status: tiqrData.status,
       phone: userData.phone,
       college: userData.college,
       name: userData.name,

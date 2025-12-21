@@ -6,7 +6,7 @@ import { db } from "../lib/firebase";
 import z from "zod";
 import { FieldValue } from "firebase-admin/firestore";
 import TiQR, {
-  BookingData,
+  FetchBookingResponse,
   BookingPayload,
   BookingResponse,
   BulkBookingResponse,
@@ -754,7 +754,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
     }
 
     const tiqrResponse = await TiQR.fetchBooking(userData.self.tiqrBookingUid);
-    const tiqrData = (await tiqrResponse.json()) as BookingData;
+    const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
 
     if (tiqrData.status && tiqrData.status !== userData.self.paymentStatus) {
       await userSnap.ref.update({
@@ -920,7 +920,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
     }
 
     const tiqrResponse = await TiQR.fetchBooking(userData.group.tiqrBookingUid);
-    const tiqrData = (await tiqrResponse.json()) as BookingData;
+    const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
 
     if (tiqrData.status && tiqrData.status !== userData.group.paymentStatus) {
       await userSnap.ref.update({

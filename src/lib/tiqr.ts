@@ -94,7 +94,7 @@ export interface BulkBookingResponse {
   };
 }
 
-export interface BookingData {
+export interface FetchBookingResponse {
   status: string;
   payment: {
     payment_id: string;

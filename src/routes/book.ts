@@ -3,7 +3,7 @@ import * as z from "zod";
 import { AllowedTicketIds, PaymentBaseUrl, PaymentStatus } from "../constants";
 import { validateAuthToken } from "../lib/auth";
 import TiQR, {
-  BookingData,
+  FetchBookingResponse,
   BookingPayload,
   BookingResponse,
 } from "../lib/tiqr";
@@ -100,7 +100,8 @@ const book: FastifyPluginAsync = async (fastify): Promise<void> => {
             const tiqrResponse = await TiQR.fetchBooking(
               userOptedEvents[uid].bookingUid
             );
-            const tiqrData = (await tiqrResponse.json()) as BookingData;
+            const tiqrData =
+              (await tiqrResponse.json()) as FetchBookingResponse;
             const paymentId = tiqrData.payment.payment_id;
 
             if (paymentId) {
@@ -205,7 +206,7 @@ const book: FastifyPluginAsync = async (fastify): Promise<void> => {
     const tiqrResponse = await TiQR.fetchBooking(
       dbUserData.events[uid].bookingUid
     );
-    const tiqrData = (await tiqrResponse.json()) as BookingData;
+    const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
 
     if (dbUserData.events[uid].status !== tiqrData.status) {
       await dbUserRef.update({

@@ -5,7 +5,7 @@ import z from "zod";
 import { PaymentStatus, Tickets } from "../constants";
 import { validateAuthToken } from "../lib/auth";
 import { db } from "../lib/firebase";
-import TiQR, { BookingData, BookingResponse } from "../lib/tiqr";
+import TiQR, { FetchBookingResponse, BookingResponse } from "../lib/tiqr";
 
 const Accommodation: FastifyPluginAsync = async (fastify): Promise<void> => {
   fastify.decorateRequest("user", null);
@@ -126,7 +126,7 @@ const Accommodation: FastifyPluginAsync = async (fastify): Promise<void> => {
     }
 
     const tiqrResponse = await TiQR.fetchBooking(userData.tiqrBookingUid);
-    const tiqrData = (await tiqrResponse.json()) as BookingData;
+    const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
 
     if (tiqrData.status && tiqrData.status !== userData.paymentStatus) {
       await userSnap.ref.update({

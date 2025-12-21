@@ -9,7 +9,7 @@ import {
   Tickets,
   WebhookSecret,
 } from "../constants";
-import TiQR, { BookingData, BookingResponse } from "../lib/tiqr";
+import TiQR, { FetchBookingResponse, BookingResponse } from "../lib/tiqr";
 import { DecodedIdToken } from "firebase-admin/auth";
 
 const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
@@ -70,7 +70,8 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
             const tiqrResponse = await TiQR.fetchBooking(
               doc.data().tiqrBookingUid
             );
-            const tiqrData = (await tiqrResponse.json()) as BookingData;
+            const tiqrData =
+              (await tiqrResponse.json()) as FetchBookingResponse;
             const paymentId = tiqrData.payment?.payment_id;
 
             if (!paymentId) {
@@ -177,7 +178,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     const doc = snapshot.docs[0].data();
 
     const tiqrResponse = await TiQR.fetchBooking(doc.tiqrBookingUid);
-    const tiqrData = (await tiqrResponse.json()) as BookingData;
+    const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
 
     const currentStatus = tiqrData.status;
 
