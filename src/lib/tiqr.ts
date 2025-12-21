@@ -3,11 +3,25 @@ import { ApiToken } from "../constants";
 export class TiQR {
   static BASE_URL = "https://api.tiqr.events";
 
-  static async createBooking(
-    bookingData: BookingPayload | { bookings: BookingPayload[] }
-  ) {
+  static async createBooking(bookingData: BookingPayload) {
     try {
       return fetch(`${TiQR.BASE_URL}/participant/booking/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${ApiToken}`,
+        },
+        body: JSON.stringify(bookingData),
+      });
+    } catch (error) {
+      console.error("Error creating booking:", error);
+      throw error;
+    }
+  }
+
+  static async createBulkBooking(bookingData: BulkBookingPayload) {
+    try {
+      return fetch(`${TiQR.BASE_URL}/participant/booking/bulk/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -112,6 +126,10 @@ export interface BookingPayload {
   };
   callback_url?: string | null;
   quantity?: number;
+}
+
+export interface BulkBookingPayload {
+  bookings: BookingPayload[];
 }
 
 export default TiQR;

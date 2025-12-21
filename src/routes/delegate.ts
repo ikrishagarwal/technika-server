@@ -582,7 +582,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
           bookingPayload.push(payload);
         });
 
-      const tiqrBookingData = await TiQR.createBooking({
+      const tiqrBookingData = await TiQR.createBulkBooking({
         bookings: bookingPayload,
       });
 
@@ -592,7 +592,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       dbPayload.paymentUrl = tiqrData.payment.url_to_redirect || "";
       dbPayload.paymentStatus = tiqrData.booking.status as PaymentStatus;
 
-      tx.update(userRef.ref, dbPayload);
+      const membersRef = [];
 
       for (const childBooking of tiqrData.booking.child_bookings) {
         if (!childBooking.meta_data?.uid)
@@ -601,16 +601,27 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         const memberSnap = await tx.get(
           db.collection("delegates").doc(childBooking.meta_data.uid)
         );
+
         if (!memberSnap.exists)
           throw new HttpError(400, "One of the members does not exist");
 
-        tx.update(memberSnap.ref, {
+        membersRef.push({
+          snap: memberSnap,
+          status: childBooking.status as PaymentStatus,
+          uid: childBooking.meta_data.uid,
+        });
+      }
+
+      for (const memberSnap of membersRef) {
+        tx.update(memberSnap.snap.ref, {
           selfBooking: false,
-          tiqrBookingUid: childBooking.uid,
-          paymentStatus: childBooking.status as PaymentStatus,
+          tiqrBookingUid: memberSnap.uid,
+          paymentStatus: memberSnap.status,
           updatedAt: FieldValue.serverTimestamp(),
         });
       }
+
+      tx.update(userRef.ref, dbPayload);
 
       return {
         success: true,
