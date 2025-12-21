@@ -37,6 +37,7 @@ export const AllowedTicketIds = process.env["TICKETS"]
   : [];
 
 export const TicketPriceToIdMap = {
+  99: 2466,
   199: 2454,
   149: 2455,
   299: 2456,
@@ -75,7 +76,6 @@ export const EventIdToPriceMap = {
   107: 149, // ekanki
   108: 599, // matargasthi
   109: 699, // hulchul
-  110: 149, // poetry
   111: 149, // kavi_sammelan
   112: 149, // debate
   113: 399, // fashion_insta
@@ -86,8 +86,11 @@ export const EventIdToPriceMap = {
   117: 149, // wall_painting
 
   // Frame & Focus
-  118: undefined, // motion_e_magic (price not confirmed)
-  119: undefined, // capture_the_unseen (price not confirmed)
+  118: 99, // motion_e_magic (price not confirmed)
+  119: 99, // capture_the_unseen (price not confirmed)
+
+  120: 149, // poetry_english
+  121: 149, // poetry_hindi
 
   // Fun
   201: undefined, // escape_room (on-spot / not fixed)
