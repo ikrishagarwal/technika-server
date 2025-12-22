@@ -281,6 +281,64 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
     };
   });
 
+  fastify.get("/event/qr/:eventId", async function (request, reply) {
+    const user = request.getDecorator<DecodedIdToken>("user");
+    const eventId = Number((request.params as { eventId: string }).eventId);
+
+    if (!eventId || isNaN(eventId)) {
+      reply.code(400);
+      return { error: true, message: "Invalid or missing event ID" };
+    }
+
+    const userSnap = await db
+      .collection("event_registrations")
+      .doc(user.uid)
+      .get();
+
+    if (!userSnap.exists) {
+      reply.code(404);
+      return { error: true, message: "No registration found for this user" };
+    }
+
+    const userData = userSnap.data() as EventSchema;
+
+    if (
+      !userData.events ||
+      !userData.events[eventId] ||
+      !userData.events[eventId].tiqrBookingUid
+    ) {
+      reply.code(404);
+      return { error: true, message: "No booking found for this event" };
+    }
+
+    try {
+      const tiqrResponse = await TiQR.fetchBooking(
+        userData.events[eventId].tiqrBookingUid
+      );
+
+      if (!tiqrResponse.ok) {
+        reply.code(502);
+        return { error: true, message: "Failed to fetch booking from TiQR" };
+      }
+
+      const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
+
+      if (tiqrData.status === PaymentStatus.Confirmed) {
+        return { success: true, checksum: tiqrData.checksum };
+      }
+
+      reply.code(403);
+      return {
+        error: true,
+        message: "Payment not confirmed",
+        status: tiqrData.status,
+      };
+    } catch (err) {
+      reply.code(500);
+      return { error: true, message: "Internal server error" };
+    }
+  });
+
   fastify.get("/event/registered", async function (request, reply) {
     const user = request.getDecorator<DecodedIdToken>("user");
     const userSnap = await db

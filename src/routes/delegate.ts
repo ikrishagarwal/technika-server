@@ -989,6 +989,50 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       message: "No booking found for user",
     };
   });
+
+  fastify.get("/delegate/qr", async function (request, reply) {
+    const user = request.getDecorator<DecodedIdToken>("user");
+
+    // Prefer new delegates collection
+    const userSnap = await db.collection("delegates").doc(user.uid).get();
+
+    if (!userSnap.exists) {
+      reply.code(404);
+      return { error: true, message: "No delegate data found for user" };
+    }
+
+    const data = userSnap.data() as ExtendedDelegateSchema;
+
+    if (!data.tiqrBookingUid) {
+      reply.code(404);
+      return { error: true, message: "No booking found for this user" };
+    }
+
+    try {
+      const tiqrResponse = await TiQR.fetchBooking(data.tiqrBookingUid);
+
+      if (!tiqrResponse.ok) {
+        reply.code(502);
+        return { error: true, message: "Failed to fetch booking from TiQR" };
+      }
+
+      const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
+
+      if (tiqrData.status === PaymentStatus.Confirmed) {
+        return { success: true, checksum: tiqrData.checksum };
+      }
+
+      reply.code(403);
+      return {
+        error: true,
+        message: "Payment not confirmed",
+        status: tiqrData.status,
+      };
+    } catch (err) {
+      reply.code(500);
+      return { error: true, message: "Internal server error" };
+    }
+  });
 };
 
 const CreateRoomBody = z.object({

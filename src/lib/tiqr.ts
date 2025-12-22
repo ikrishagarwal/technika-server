@@ -113,6 +113,7 @@ export interface FetchBookingResponse {
   payment: {
     payment_id: string;
   };
+  checksum: string;
 }
 
 export interface BookingPayload {

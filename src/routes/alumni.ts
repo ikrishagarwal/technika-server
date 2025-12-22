@@ -201,6 +201,49 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     };
   });
 
+  fastify.get("/alumni/qr", async function (request, reply) {
+    const user = request.getDecorator<DecodedIdToken>("user");
+
+    const snapshot = await db
+      .collection("alumni_registrations")
+      .where("firebaseUid", "==", user.uid)
+      .get();
+
+    if (snapshot.empty) {
+      reply.status(404);
+      return { error: "Registration not found" };
+    }
+
+    const doc = snapshot.docs[0].data();
+
+    if (!doc.tiqrBookingUid) {
+      reply.status(404);
+      return { error: "No booking found for this user" };
+    }
+
+    try {
+      const tiqrResponse = await TiQR.fetchBooking(doc.tiqrBookingUid);
+
+      if (!tiqrResponse.ok) {
+        reply.status(502);
+        return { error: "Failed to fetch booking from TiQR" };
+      }
+
+      const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
+
+      if (tiqrData.status === PaymentStatus.Confirmed) {
+        reply.status(200);
+        return { success: true, checksum: tiqrData.checksum };
+      }
+
+      reply.status(403);
+      return { error: "Payment not confirmed", status: tiqrData.status };
+    } catch (err) {
+      reply.status(500);
+      return { error: "Internal server error" };
+    }
+  });
+
   // Not sure about this endpoint, if it's actually put to use..???
   fastify.post("/alumni/callback", async function (request, reply) {
     const authToken = request.headers["x-webhook-token"];

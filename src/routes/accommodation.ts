@@ -146,6 +146,50 @@ const Accommodation: FastifyPluginAsync = async (fastify): Promise<void> => {
       message: "Status fetched successfully",
     };
   });
+
+  fastify.get("/accommodation/qr", async function (request, reply) {
+    const user = request.getDecorator<DecodedIdToken>("user");
+
+    const userSnap = await db.collection("accommodation").doc(user.uid).get();
+
+    if (!userSnap.exists) {
+      reply.code(404);
+      return { error: true, message: "No registration found for this user" };
+    }
+
+    const userData = userSnap.data() as AccommodationSchema;
+
+    if (!userData.tiqrBookingUid) {
+      reply.code(404);
+      return { error: true, message: "No booking found for this user" };
+    }
+
+    try {
+      const tiqrResponse = await TiQR.fetchBooking(userData.tiqrBookingUid);
+
+      if (!tiqrResponse.ok) {
+        reply.code(502);
+        return { error: true, message: "Failed to fetch booking from TiQR" };
+      }
+
+      const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
+
+      if (tiqrData.status === PaymentStatus.Confirmed) {
+        reply.code(200);
+        return { success: true, checksum: tiqrData.checksum };
+      }
+
+      reply.code(403);
+      return {
+        error: true,
+        message: "Payment not confirmed",
+        status: tiqrData.status,
+      };
+    } catch (err) {
+      reply.code(500);
+      return { error: true, message: "Internal server error" };
+    }
+  });
 };
 
 const AccommodationBookingPayload = z.object({
