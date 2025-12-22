@@ -100,6 +100,7 @@ export const EventIdToPriceMap = {
   302: 249, // valorant
   303: undefined, // fifa (on-spot)
   304: undefined, // tekken (on-spot)
+  305: 199, // free_fire
 };
 
 // LEGACY
