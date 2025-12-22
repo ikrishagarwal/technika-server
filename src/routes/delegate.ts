@@ -326,7 +326,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
 
   fastify.get("/delegate/status/user", async function (request, reply) {
     const user = request.getDecorator<DecodedIdToken>("user");
-    const userSnap = await db.collection("delegate").doc(user.uid).get();
+    const userSnap = await db.collection("delegates").doc(user.uid).get();
 
     if (!userSnap.exists) {
       reply.code(404);
