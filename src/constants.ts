@@ -25,7 +25,7 @@ export enum Tickets {
 
 export const EventMappings: Record<string, string> = {
   "2387": "alumni_registrations",
-  "2399": "delegate",
+  "2399": "delegates",
   "2440": "accommodation",
 };
 
