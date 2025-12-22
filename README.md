@@ -16,11 +16,13 @@ This repository contains the server-side code for Technika 25. The server is bui
 
 - `POST /accommodation/book`: Book new accommodation slots.
 - `GET /accommodation/status`: Get your accommodation booking status.
+- `GET /accommodation/qr`: Return the TiQR checksum for the user's accommodation booking.
 
 ### Alumni
 
 - `POST /alumni/register`: Make a new registration as an alumni.
 - `GET /alumni/status`: Get your alumni registration status.
+- `GET /alumni/qr`: Return the TiQR checksum for the user's alumni booking.
 
 ### Delegate
 
@@ -36,6 +38,7 @@ This repository contains the server-side code for Technika 25. The server is bui
 
 - `POST /delegate/register/self`: Register a delegate booking for yourself (individual).
 - `POST /delegate/register/group`: Register tickets for all members in your delegate room (group owner exclusive).
+- `GET /delegate/qr`: Return the TiQR checksum for the user's delegate booking.
 
 #### Legacy Delegate Endpoints
 
@@ -54,6 +57,7 @@ This repository contains the server-side code for Technika 25. The server is bui
 - `POST /event/book`: Book tickets for any event.
 - `GET /event/status/:eventId`: Get your booking status for a specific event.
 - `GET /events/registered`: Get a list of all the event you initiated a registration for. May it be pending or confirmed.
+- `GET /event/qr/:eventId`: Return the TiQR checksum for the user's event booking.
 
 ### Webhook
 
