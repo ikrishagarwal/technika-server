@@ -11,6 +11,7 @@ import {
 } from "../constants";
 import TiQR, { FetchBookingResponse, BookingResponse } from "../lib/tiqr";
 import { DecodedIdToken } from "firebase-admin/auth";
+import { FieldValue } from "firebase-admin/firestore";
 
 const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   fastify.decorateRequest("user", null);
@@ -18,11 +19,10 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     const user = await validateAuthToken(request).catch(() => null);
 
     if (!user) {
-      reply.code(401);
-      return {
+      return reply.code(401).send({
         error: true,
         message: "Unauthorized",
-      };
+      });
     }
 
     request.setDecorator("user", user);
@@ -111,8 +111,8 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       yearOfPassing,
       tShirtSize: size || "",
       paymentStatus: PaymentStatus.PendingPayment,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
 
     await alumniRef.set(alumniData);
@@ -144,7 +144,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
       // It's a free ticket
       await alumniRef.update({
         paymentStatus: PaymentStatus.Confirmed,
-        updatedAt: new Date().toISOString(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
 
       reply.status(200);
@@ -185,7 +185,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     if (currentStatus && currentStatus != doc.paymentStatus) {
       docRef.update({
         paymentStatus: currentStatus,
-        updatedAt: new Date().toISOString(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
     }
 
@@ -242,10 +242,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     if (newStatus !== undefined && newStatus !== doc.data().paymentStatus) {
       await doc.ref.update({
         paymentStatus: newStatus,
-        updatedAt:
-          newStatus == PaymentStatus.Confirmed
-            ? new Date().toISOString()
-            : doc.data().updatedAt,
+        updatedAt: FieldValue.serverTimestamp(),
       });
     }
 
