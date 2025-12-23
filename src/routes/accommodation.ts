@@ -70,14 +70,14 @@ const Accommodation: FastifyPluginAsync = async (fastify): Promise<void> => {
 
     const tiqrData = (await tiqrResponse.json()) as BookingResponse;
 
-    const payload = {
+    const payload: AccommodationSchema["events"][number] = {
       tiqrBookingUid: tiqrData.booking.uid,
-      checkIn: body.data.checkIn,
-      checkOut: body.data.checkOut,
       paymentStatus: tiqrData.booking.status,
       paymentUrl: tiqrData.payment.url_to_redirect || "",
       updatedAt: FieldValue.serverTimestamp(),
-    } as AccommodationSchema["events"][number];
+    };
+
+    body.data.preferences && (payload["preferences"] = body.data.preferences);
 
     await userSnap.ref.update(payload);
 
@@ -196,8 +196,7 @@ const AccommodationBookingPayload = z.object({
   name: z.string().min(1),
   phone: z.string().min(10),
   college: z.string().min(1),
-  checkIn: z.string().optional(),
-  checkOut: z.string().optional(),
+  preferences: z.string().optional(),
 });
 
 interface AccommodationSchema extends Record<string, any> {
@@ -205,8 +204,7 @@ interface AccommodationSchema extends Record<string, any> {
   email: string;
   phone: string;
   college: string;
-  checkIn?: string;
-  checkOut?: string;
+  preferences?: string;
   tiqrBookingUid?: string;
   paymentStatus?: PaymentStatus;
   createdAt: FirebaseFirestore.FieldValue;
