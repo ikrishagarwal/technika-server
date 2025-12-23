@@ -19,7 +19,7 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     const user = await validateAuthToken(request).catch(() => null);
 
     if (!user) {
-      return reply.code(401).send({
+      return await reply.code(401).send({
         error: true,
         message: "Unauthorized",
       });

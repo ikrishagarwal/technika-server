@@ -19,10 +19,9 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
     const user = await validateAuthToken(request);
 
     if (!user) {
-      reply //
+      return await reply //
         .code(401)
         .send({ error: true, message: "Unauthorized" });
-      return;
     }
 
     request.setDecorator<DecodedIdToken>("user", user);
