@@ -16,17 +16,20 @@ export enum Tickets {
   Alumni = 2387,
   Delegate = 2399,
   DelegateComplimentary = 2416,
-  // TechnicalSolo = 2454,
-  // TechnicalSolo = 2453,
-  // CulturalSolo = 2455,
-  // CulturalGroup = 2456,
   Accommodation = 2440,
+  MerchTee = 2475,
+  MerchJacket = 2474,
+  MerchCombo = 2476,
 }
 
 export const EventMappings: Record<string, string> = {
   "2387": "alumni_registrations",
   "2399": "delegates",
+  "2416": "delegates",
   "2440": "accommodation",
+  "2475": "merchandise",
+  "2474": "merchandise",
+  "2476": "merchandise",
 };
 
 export const AllowedTicketIds = process.env["TICKETS"]

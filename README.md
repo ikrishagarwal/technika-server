@@ -59,6 +59,12 @@ This repository contains the server-side code for Technika 25. The server is bui
 - `GET /events/registered`: Get a list of all the event you initiated a registration for. May it be pending or confirmed.
 - `GET /event/qr/:eventId`: Return the TiQR checksum for the user's event booking.
 
+### Merch
+
+- `POST /merch/order`: Create a new merch order (a user can create multiple orders).
+- `GET /merch/orders`: Get all merch orders for the user.
+- `GET /merch/status/:id`: Get payment status for a specific merch order.
+
 ### Webhook
 
 - `POST /webhook`: Webhook endpoint for our payment provider to notify us about the payment status changes.

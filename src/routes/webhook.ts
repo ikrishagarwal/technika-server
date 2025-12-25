@@ -55,6 +55,38 @@ const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
     const collectionName = EventMappings[ticketId];
 
     switch (ticketId) {
+      case Tickets.MerchTee:
+      case Tickets.MerchJacket:
+      case Tickets.MerchCombo:
+        const merchRef = db.collection(collectionName).doc(body.booking_uid);
+        const merchSnap = await merchRef.get();
+
+        if (merchSnap.exists) {
+          await merchRef.update({
+            paymentStatus: body.booking_status,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          break;
+        }
+
+        const merchEntry = await db
+          .collection(collectionName)
+          .where("tiqrBookingUid", "==", body.booking_uid)
+          .get();
+
+        if (merchEntry.empty) {
+          fastify.log.warn(
+            `No matching merch order found for booking UID: ${body.booking_uid}`
+          );
+          return reply.code(204).send();
+        }
+
+        await merchEntry.docs[0].ref.update({
+          paymentStatus: body.booking_status,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        break;
+
       case Tickets.Alumni:
         const alumniEntry = await db
           .collection(collectionName)
