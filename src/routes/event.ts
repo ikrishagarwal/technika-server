@@ -8,6 +8,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import {
   EventIdToPriceMap,
   PaymentStatus,
+  SoloEvents,
   TicketPriceToIdMap,
 } from "../constants";
 import { isBitEmail } from "../lib/utils";
@@ -157,17 +158,21 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
       }
 
       payload.isDelegate = true;
-      payload.status = PaymentStatus.Confirmed;
-      payload.paymentUrl = "";
 
-      await userSnap.ref.update({
-        [`events.${body.data.eventId}`]: payload,
-      });
+      // Delegates get free bookings only for solo events.
+      if (SoloEvents.includes(body.data.eventId)) {
+        payload.status = PaymentStatus.Confirmed;
+        payload.paymentUrl = "";
 
-      return {
-        success: true,
-        message: "Booking created successfully",
-      };
+        await userSnap.ref.update({
+          [`events.${body.data.eventId}`]: payload,
+        });
+
+        return {
+          success: true,
+          message: "Booking created successfully",
+        };
+      }
     }
 
     const tiqrResponse = await TiQR.createBooking({

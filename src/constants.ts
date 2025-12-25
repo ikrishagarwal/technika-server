@@ -106,6 +106,10 @@ export const EventIdToPriceMap = {
   305: 199, // free_fire
 };
 
+export const SoloEvents = [
+  2, 9, 10, 11, 101, 104, 107, 111, 112, 119, 120, 121, 303, 304,
+];
+
 // LEGACY
 // export enum EventIds {
 //   Delegate = 1683,
