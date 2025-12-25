@@ -22,14 +22,14 @@ export enum Tickets {
   MerchCombo = 2476,
 }
 
-export const EventMappings: Record<string, string> = {
-  "2387": "alumni_registrations",
-  "2399": "delegates",
-  "2416": "delegates",
-  "2440": "accommodation",
-  "2475": "merchandise",
-  "2474": "merchandise",
-  "2476": "merchandise",
+export const EventMappings: Record<number, string> = {
+  [Tickets.Alumni]: "alumni_registrations",
+  [Tickets.Delegate]: "delegates",
+  [Tickets.DelegateComplimentary]: "delegates",
+  [Tickets.Accommodation]: "accommodation",
+  [Tickets.MerchTee]: "merchandise",
+  [Tickets.MerchJacket]: "merchandise",
+  [Tickets.MerchCombo]: "merchandise",
 };
 
 export const AllowedTicketIds = process.env["TICKETS"]
