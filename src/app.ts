@@ -35,6 +35,10 @@ app.register(cors, {
 app.setErrorHandler((error, request, reply) => {
   const err = error as any;
   const code = Number(err.statusCode) || 500;
+  const sentryEnabled =
+    !!process.env.SENTRY_DSN &&
+    process.env.NODE_ENV === "production" &&
+    process.env.SENTRY_DISABLED !== "true";
   // workaround cause fastify devs were real high while making getDecorator
   const user = (request as any).user as DecodedIdToken | null;
   const headers = request.headers;
@@ -45,20 +49,22 @@ app.setErrorHandler((error, request, reply) => {
   } else {
     request.log.error(err);
 
-    Sentry.captureException(error, {
-      extra: {
-        route: request.url,
-        method: request.method,
-        headers: request.headers,
-        query: request.query,
-        params: request.params,
-        body: request.body,
-        user: {
-          uid: user?.uid || "unauthenticated",
-          email: user?.email || "unauthenticated",
+    if (sentryEnabled) {
+      Sentry.captureException(error, {
+        extra: {
+          route: request.url,
+          method: request.method,
+          headers: request.headers,
+          query: request.query,
+          params: request.params,
+          body: request.body,
+          user: {
+            uid: user?.uid || "unauthenticated",
+            email: user?.email || "unauthenticated",
+          },
         },
-      },
-    });
+      });
+    }
   }
 
   return reply.code(err.statusCode || 500).send({
@@ -78,7 +84,13 @@ for (const dir of dirs) {
   }
 }
 
-Sentry.setupFastifyErrorHandler(app);
+if (
+  !!process.env.SENTRY_DSN &&
+  process.env.NODE_ENV === "production" &&
+  process.env.SENTRY_DISABLED !== "true"
+) {
+  Sentry.setupFastifyErrorHandler(app);
+}
 
 export default app;
 export { app, options };
