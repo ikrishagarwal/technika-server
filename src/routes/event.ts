@@ -138,6 +138,34 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
       };
     }
 
+    if (body.data.isAlumni && SoloEvents.includes(body.data.eventId)) {
+      const alumniSnap = await db
+        .collection("alumni_registrations")
+        .where("firebaseUid", "==", user.uid)
+        .get();
+
+      if (!alumniSnap.empty) {
+        const alumniData = alumniSnap.docs[0].data() as {
+          paymentStatus?: string;
+        };
+
+        if (alumniData.paymentStatus === PaymentStatus.Confirmed) {
+          payload.isAlumni = true;
+          payload.status = PaymentStatus.Confirmed;
+          payload.paymentUrl = "";
+
+          await userSnap.ref.update({
+            [`events.${body.data.eventId}`]: payload,
+          });
+
+          return {
+            success: true,
+            message: "Booking created successfully",
+          };
+        }
+      }
+    }
+
     if (body.data.isDelegate) {
       const delegateUser = await db.collection("delegate").doc(user.uid).get();
 
@@ -381,6 +409,7 @@ const EventBookingPayload = z.object({
   type: z.enum(["solo", "group"]),
   isBitStudent: z.boolean().optional(),
   isDelegate: z.boolean().optional(),
+  isAlumni: z.boolean().optional(),
   members: z
     .array(
       z.object({
@@ -406,6 +435,7 @@ interface EventSchema extends Record<string, any> {
       type: string;
       isBitStudent?: boolean;
       isDelegate?: boolean;
+      isAlumni?: boolean;
       members?: Array<{
         name: string;
         phone: string;
