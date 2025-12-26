@@ -210,6 +210,8 @@ const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
     }
 
     if (EventTickets.includes(ticketId)) {
+      const collectionName = "event_registrations";
+
       if (!tiqrData.meta_data || !tiqrData.meta_data.eventId) {
         fastify.log.warn(
           `No eventId found in meta_data for booking UID: ${body.booking_uid}`
@@ -220,7 +222,7 @@ const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
       const eventUser = await db
         .collection(collectionName)
         .where(
-          `${tiqrData.meta_data.eventId}.tiqrBookingUid`,
+          `events.${tiqrData.meta_data.eventId}.tiqrBookingUid`,
           "==",
           body.booking_uid
         )
