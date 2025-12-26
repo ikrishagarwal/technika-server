@@ -28,97 +28,613 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
   });
 
   fastify.post("/delegate/create", async function (request, reply) {
-    const user = request.getDecorator<DecodedIdToken>("user");
-    const body = CreateRoomBody.safeParse(request.body);
+    try {
+      const user = request.getDecorator<DecodedIdToken>("user");
+      const body = CreateRoomBody.safeParse(request.body);
 
-    if (!body.success) {
-      reply.code(400);
-      return {
-        error: true,
-        message: "Invalid request body",
-        details: z.prettifyError(body.error),
-      };
+      if (!body.success) {
+        reply.code(400);
+        return {
+          error: true,
+          message: "Invalid request body",
+          details: z.prettifyError(body.error),
+        };
+      }
+
+      const result = await db.runTransaction(async (tx): Promise<object> => {
+        const userRef = db.collection("delegates").doc(user.uid);
+        const snapshot = await tx.get(userRef);
+
+        if (snapshot.exists) {
+          const data = snapshot.data() as ExtendedDelegateSchema;
+
+          if (
+            data.selfBooking &&
+            data.paymentStatus === PaymentStatus.Confirmed
+          ) {
+            throw new HttpError(
+              400,
+              "User has already registered as a self-booking delegate"
+            );
+          }
+
+          if (data.member) {
+            throw new HttpError(
+              400,
+              "User is already a member of another delegate room"
+            );
+          }
+
+          if (data.owner && data.roomId) {
+            return {
+              success: true,
+              roomId: snapshot.data()!.roomId,
+            };
+          }
+        }
+
+        const roomId = uuid();
+
+        const updatePayload = {
+          owner: true,
+          email: user.email,
+          name: body.data.name,
+          phone: body.data.phone,
+          college: body.data.college,
+          roomId,
+          updatedAt: FieldValue.serverTimestamp(),
+        } as ExtendedDelegateSchema;
+
+        if (!snapshot.exists || snapshot.data()!.createdAt === undefined) {
+          updatePayload.createdAt = FieldValue.serverTimestamp();
+        }
+
+        tx.set(userRef, updatePayload, { merge: true });
+
+        return {
+          success: true,
+          roomId,
+        };
+      });
+
+      return result;
+    } catch (error) {
+      if (error instanceof HttpError) {
+        return reply.code(error.statusCode).send({
+          error: true,
+          message: error.message,
+          details: error.error,
+        });
+      }
+      throw error;
     }
+  });
 
-    const result = await db.runTransaction(async (tx): Promise<object> => {
-      const userRef = db.collection("delegates").doc(user.uid);
-      const snapshot = await tx.get(userRef);
+  fastify.post("/delegate/join", async function (request, reply) {
+    try {
+      const user = request.getDecorator<DecodedIdToken>("user");
+      const body = JoinRoomBody.safeParse(request.body);
 
-      if (snapshot.exists) {
-        const data = snapshot.data() as ExtendedDelegateSchema;
+      if (!body.success) {
+        reply.code(400);
+        return {
+          error: true,
+          message: "Invalid request body",
+        };
+      }
+
+      const { roomId } = body.data;
+
+      const result = await db.runTransaction(async (tx): Promise<object> => {
+        const userRef = db.collection("delegates").doc(user.uid);
+        const userSnap = await tx.get(userRef);
+
+        if (userSnap.exists) {
+          const userData = userSnap.data() as ExtendedDelegateSchema;
+
+          if (
+            userData.selfBooking &&
+            userData.paymentStatus === PaymentStatus.Confirmed
+          ) {
+            throw new HttpError(
+              400,
+              "User has already registered as a self-booking delegate"
+            );
+          }
+
+          if (userData.member) {
+            if (userData.member === roomId) {
+              return {
+                success: true,
+                message: "Already a part of the delegate room",
+              };
+            }
+
+            throw new HttpError(
+              400,
+              "User is already a member of another delegate room"
+            );
+          }
+
+          if (userData.owner) {
+            throw new HttpError(400, "User is already a room owner");
+          }
+        }
+
+        const roomQuery = db
+          .collection("delegates")
+          .where("roomId", "==", roomId);
+        const roomSnap = await tx.get(roomQuery);
+
+        if (roomSnap.empty) {
+          throw new HttpError(404, "Delegate room not found");
+        }
+
+        const roomData = roomSnap.docs[0].data() as ExtendedDelegateSchema;
+
+        if (roomData.paymentStatus === PaymentStatus.Confirmed) {
+          throw new HttpError(400, "Can't join an already registered room.");
+        }
+
+        const existingUsers = roomData.users;
+
+        if (existingUsers && existingUsers[user.uid]) {
+          return {
+            success: true,
+            message: "Already a part of the delegate room",
+          };
+        }
+
+        tx.update(roomSnap.docs[0].ref, {
+          [`users.${user.uid}`]: {
+            email: user.email,
+            name: body.data.name,
+            phone: body.data.phone,
+            college: body.data.college,
+          },
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        const updatePayload = {
+          email: user.email,
+          name: body.data.name,
+          phone: body.data.phone,
+          college: body.data.college,
+          member: roomId,
+          updatedAt: FieldValue.serverTimestamp(),
+        } as ExtendedDelegateSchema;
+
+        if (!userSnap.exists || userSnap.data()?.createdAt === undefined) {
+          updatePayload.createdAt = FieldValue.serverTimestamp();
+        }
+
+        tx.set(userRef, updatePayload, { merge: true });
+
+        return {
+          success: true,
+          message: "Joined the delegate room successfully",
+        };
+      });
+
+      return result;
+    } catch (error) {
+      if (error instanceof HttpError) {
+        return reply.code(error.statusCode).send({
+          error: true,
+          message: error.message,
+          details: error.error,
+        });
+      }
+      throw error;
+    }
+  });
+
+  fastify.delete("/delegate/leave", async function (request, reply) {
+    try {
+      const user = request.getDecorator<DecodedIdToken>("user");
+
+      return await db.runTransaction(async (tx) => {
+        const userRef = db.collection("delegates").doc(user.uid);
+        const snapshot = await tx.get(userRef);
+
+        if (!snapshot.exists) {
+          return {
+            success: true,
+            message: "User is not part of any delegate room",
+          };
+        }
+
+        const userData = snapshot.data() as ExtendedDelegateSchema;
 
         if (
-          data.selfBooking &&
-          data.paymentStatus === PaymentStatus.Confirmed
+          !userData.selfBooking &&
+          userData.paymentStatus === PaymentStatus.Confirmed
         ) {
           throw new HttpError(
             400,
-            "User has already registered as a self-booking delegate"
+            "Can't leave a room after successful registration"
           );
         }
 
-        if (data.member) {
-          throw new HttpError(
-            400,
-            "User is already a member of another delegate room"
-          );
+        if (userData.owner) {
+          throw new HttpError(400, "User is a room owner");
         }
 
-        if (data.owner && data.roomId) {
+        if (!userData.member) {
           return {
             success: true,
-            roomId: snapshot.data()!.roomId,
+            message: "User is not part of any delegate room",
+          };
+        }
+
+        const roomId = userData.member;
+
+        const roomQuery = db
+          .collection("delegates")
+          .where("roomId", "==", roomId);
+        const roomSnap = await tx.get(roomQuery);
+
+        tx.update(userRef, {
+          member: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        if (roomSnap.empty) {
+          return {
+            success: true,
+            message: "Delegate room not found",
+          };
+        }
+
+        tx.update(roomSnap.docs[0].ref, {
+          [`users.${user.uid}`]: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return {
+          success: true,
+          message: "Left the delegate room successfully",
+        };
+      });
+    } catch (error) {
+      if (error instanceof HttpError) {
+        return reply.code(error.statusCode).send({
+          error: true,
+          message: error.message,
+          details: error.error,
+        });
+      }
+      throw error;
+    }
+  });
+
+  fastify.delete("/delegate/delete", async function (request, reply) {
+    try {
+      const user = request.getDecorator<DecodedIdToken>("user");
+
+      return await db.runTransaction(async (tx) => {
+        const userRef = db.collection("delegates").doc(user.uid);
+        const userSnap = await tx.get(userRef);
+
+        if (!userSnap.exists || !userSnap.data()!.owner) {
+          return {
+            success: true,
+            message: "User isn't a room owner already",
+          };
+        }
+
+        if (userSnap.data()!.paymentStatus === PaymentStatus.Confirmed) {
+          throw new HttpError(
+            400,
+            "Can't delete a room after successful registration"
+          );
+        }
+
+        const roomId = userSnap.data()!.roomId;
+        const roomUsersQuery = db
+          .collection("delegates")
+          .where("member", "==", roomId);
+        const roomUsers = await tx.get(roomUsersQuery);
+
+        tx.update(userRef, {
+          owner: false,
+          users: FieldValue.delete(),
+          roomId: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        roomUsers.docs.forEach((doc) => {
+          tx.update(doc.ref, {
+            member: FieldValue.delete(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        });
+
+        return {
+          success: true,
+          message: "Delegate room deleted successfully",
+        };
+      });
+    } catch (error) {
+      if (error instanceof HttpError) {
+        return reply.code(error.statusCode).send({
+          error: true,
+          message: error.message,
+          details: error.error,
+        });
+      }
+      throw error;
+    }
+  });
+
+  fastify.get("/delegate/status/user", async function (request, reply) {
+    try {
+      const user = request.getDecorator<DecodedIdToken>("user");
+      const userSnap = await db.collection("delegates").doc(user.uid).get();
+
+      if (!userSnap.exists) {
+        reply.code(404);
+        return {
+          error: true,
+          isOwner: false,
+          isMember: false,
+        };
+      }
+
+      const userData = userSnap.data() as ExtendedDelegateSchema;
+
+      let paymentStatus = userData.paymentStatus;
+
+      if (
+        paymentStatus &&
+        paymentStatus !== PaymentStatus.Confirmed &&
+        userData.tiqrBookingUid
+      ) {
+        const tiqrResponse = await TiQR.fetchBooking(userData.tiqrBookingUid);
+        const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
+
+        if (tiqrData.status && tiqrData.status !== paymentStatus) {
+          paymentStatus = tiqrData.status as any;
+          await userSnap.ref.update({
+            paymentStatus: tiqrData.status,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        } else if (tiqrData.status) {
+          paymentStatus = tiqrData.status as any;
+        }
+      }
+
+      return {
+        success: true,
+        isOwner: Boolean(userData.owner),
+        isMember: Boolean(userData.member),
+        roomId: userData.roomId,
+        selfBooking: Boolean(userData.selfBooking),
+        paymentStatus,
+        paymentUrl: userData.paymentUrl,
+        users: userData.users ? Object.values(userData.users) : null,
+      };
+    } catch (error) {
+      if (error instanceof HttpError) {
+        return reply.code(error.statusCode).send({
+          error: true,
+          message: error.message,
+          details: error.error,
+        });
+      }
+      throw error;
+    }
+  });
+
+  fastify.get("/delegate/status/room/:roomId", async function (request, reply) {
+    try {
+      const user = request.getDecorator<DecodedIdToken>("user");
+      const { roomId } = request.params as { roomId: string };
+      const roomSnap = await db
+        .collection("delegates")
+        .where("roomId", "==", roomId)
+        .get();
+
+      if (roomSnap.empty) {
+        reply.code(404);
+        return {
+          error: true,
+          message: "Delegate room not found",
+        };
+      }
+
+      const roomOwnerData = roomSnap.docs[0].data() as ExtendedDelegateSchema;
+      const roomOwnerRef = roomSnap.docs[0].ref;
+
+      const authorizedUserIds = [
+        roomSnap.docs[0].id,
+        ...Object.keys(roomOwnerData.users || {}),
+      ];
+
+      if (!authorizedUserIds.includes(user.uid)) {
+        reply.code(403);
+        return {
+          error: true,
+          message: "Forbidden: You are not associated with this delegate room",
+        };
+      }
+
+      let paymentStatus = roomOwnerData.paymentStatus;
+
+      if (
+        paymentStatus &&
+        paymentStatus !== PaymentStatus.Confirmed &&
+        roomOwnerData.tiqrBookingUid
+      ) {
+        const tiqrResponse = await TiQR.fetchBooking(roomOwnerData.tiqrBookingUid);
+        const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
+
+        if (tiqrData.status && tiqrData.status !== paymentStatus) {
+          paymentStatus = tiqrData.status as any;
+          await roomOwnerRef.update({
+            paymentStatus: tiqrData.status,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        } else if (tiqrData.status) {
+          paymentStatus = tiqrData.status as any;
+        }
+      }
+
+      return {
+        success: true,
+        owner: {
+          name: roomOwnerData.name,
+          email: roomOwnerData.email,
+          phone: roomOwnerData.phone,
+          college: roomOwnerData.college,
+        },
+        users: roomOwnerData.users ? Object.values(roomOwnerData.users) : null,
+        paymentStatus,
+        paymentUrl: roomOwnerData.paymentUrl,
+      };
+    } catch (error) {
+      if (error instanceof HttpError) {
+        return reply.code(error.statusCode).send({
+          error: true,
+          message: error.message,
+          details: error.error,
+        });
+      }
+      throw error;
+    }
+  });
+
+  fastify.post("/delegate/register/self", async function (request, reply) {
+    try {
+      const user = request.getDecorator<DecodedIdToken>("user");
+      const body = DelegateBookSelfBody.safeParse(request.body);
+
+      if (!body.success) {
+        reply.code(400);
+        return {
+          error: true,
+          details: "Invalid request body",
+        };
+      }
+
+      const userSnap = await db.collection("delegates").doc(user.uid).get();
+
+      if (userSnap.exists) {
+        const userData = userSnap.data() as ExtendedDelegateSchema;
+
+        if (userData.owner) {
+          reply.code(400);
+          return {
+            error: true,
+            message: "Delete your existing room to register as self",
+          };
+        }
+
+        if (userData.member) {
+          reply.code(400);
+          return {
+            error: true,
+            message: "Leave your existing room to register as self",
+          };
+        }
+
+        if (
+          userData.selfBooking &&
+          userData.paymentStatus === PaymentStatus.Confirmed
+        ) {
+          reply.code(400);
+          return {
+            error: true,
+            message: "You have already registered successfully as a delegate",
+          };
+        }
+
+        if (
+          userData.selfBooking &&
+          userData.paymentStatus === PaymentStatus.PendingPayment
+        ) {
+          const payload = {} as any;
+
+          if (body.data.address !== userData.address)
+            payload.address = body.data.address;
+
+          if (body.data.college !== userData.college)
+            payload.college = body.data.college;
+
+          if (body.data.name !== userData.name) payload.name = body.data.name;
+
+          if (body.data.phone !== userData.phone) payload.phone = body.data.phone;
+
+          if (Object.keys(payload).length > 0) {
+            payload.updatedAt = FieldValue.serverTimestamp();
+          }
+
+          if (Object.keys(payload).length > 0) {
+            await userSnap.ref.update(payload);
+          }
+
+          return {
+            success: true,
+            paymentUrl: userData.paymentUrl,
           };
         }
       }
 
-      const roomId = uuid();
+      const tiqrResponse = await TiQR.createBooking({
+        email: user.email ?? "",
+        first_name: body.data.name.split(" ").at(0)!,
+        last_name: body.data.name.split(" ").slice(1).join(" ") || "",
+        phone_number: body.data.phone,
+        ticket: Tickets.Delegate,
+        meta_data: {
+          address: body.data.address || "",
+          selfBooking: true,
+          college: body.data.college || "",
+        },
+      });
 
-      const updatePayload = {
-        owner: true,
-        email: user.email,
-        name: body.data.name,
-        phone: body.data.phone,
-        college: body.data.college,
-        roomId,
+      const tiqrData = (await tiqrResponse.json()) as BookingResponse;
+
+      const payload = {
+        selfBooking: true,
+        tiqrBookingUid: tiqrData.booking.uid,
+        paymentUrl: tiqrData.payment.url_to_redirect || "",
+        paymentStatus: tiqrData.booking.status,
         updatedAt: FieldValue.serverTimestamp(),
       } as ExtendedDelegateSchema;
 
-      if (!snapshot.exists || snapshot.data()!.createdAt === undefined) {
-        updatePayload.createdAt = FieldValue.serverTimestamp();
-      }
+      if (!userSnap.exists) payload.createdAt = FieldValue.serverTimestamp();
 
-      tx.set(userRef, updatePayload, { merge: true });
+      await userSnap.ref.set(payload, { merge: true });
 
       return {
         success: true,
-        roomId,
+        paymentUrl: tiqrData.payment.url_to_redirect,
       };
-    });
-
-    return result;
+    } catch (error) {
+      if (error instanceof HttpError) {
+        return reply.code(error.statusCode).send({
+          error: true,
+          message: error.message,
+          details: error.error,
+        });
+      }
+      throw error;
+    }
   });
 
-  fastify.post("/delegate/join", async function (request, reply) {
-    const user = request.getDecorator<DecodedIdToken>("user");
-    const body = JoinRoomBody.safeParse(request.body);
+  fastify.post("/delegate/register/group", async function (request, reply) {
+    try {
+      const user = request.getDecorator<DecodedIdToken>("user");
 
-    if (!body.success) {
-      reply.code(400);
-      return {
-        error: true,
-        message: "Invalid request body",
-      };
-    }
+      return db.runTransaction(async (tx) => {
+        const userRef = await tx.get(db.collection("delegates").doc(user.uid));
 
-    const { roomId } = body.data;
+        if (!userRef.exists) {
+          throw new HttpError(400, "You don't own a room");
+        }
 
-    const result = await db.runTransaction(async (tx): Promise<object> => {
-      const userRef = db.collection("delegates").doc(user.uid);
-      const userSnap = await tx.get(userRef);
-
-      if (userSnap.exists) {
-        const userData = userSnap.data() as ExtendedDelegateSchema;
+        const userData = userRef.data() as ExtendedDelegateSchema;
 
         if (
           userData.selfBooking &&
@@ -126,550 +642,126 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         ) {
           throw new HttpError(
             400,
-            "User has already registered as a self-booking delegate"
+            "You already have a self registrations to proceed with group registration"
           );
         }
 
-        if (userData.member) {
-          if (userData.member === roomId) {
-            return {
-              success: true,
-              message: "Already a part of the delegate room",
-            };
-          }
-
+        if (!userData.owner || !userData.roomId) {
           throw new HttpError(
             400,
-            "User is already a member of another delegate room"
+            "You don't own a room to make a registration"
           );
         }
 
-        if (userData.owner) {
-          throw new HttpError(400, "User is already a room owner");
-        }
-      }
-
-      const roomQuery = db
-        .collection("delegates")
-        .where("roomId", "==", roomId);
-      const roomSnap = await tx.get(roomQuery);
-
-      if (roomSnap.empty) {
-        throw new HttpError(404, "Delegate room not found");
-      }
-
-      const roomData = roomSnap.docs[0].data() as ExtendedDelegateSchema;
-
-      if (roomData.paymentStatus === PaymentStatus.Confirmed) {
-        throw new HttpError(400, "Can't join an already registered room.");
-      }
-
-      const existingUsers = roomData.users;
-
-      if (existingUsers && existingUsers[user.uid]) {
-        return {
-          success: true,
-          message: "Already a part of the delegate room",
-        };
-      }
-
-      tx.update(roomSnap.docs[0].ref, {
-        [`users.${user.uid}`]: {
-          email: user.email,
-          name: body.data.name,
-          phone: body.data.phone,
-          college: body.data.college,
-        },
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-
-      const updatePayload = {
-        email: user.email,
-        name: body.data.name,
-        phone: body.data.phone,
-        college: body.data.college,
-        member: roomId,
-        updatedAt: FieldValue.serverTimestamp(),
-      } as ExtendedDelegateSchema;
-
-      if (!userSnap.exists || userSnap.data()?.createdAt === undefined) {
-        updatePayload.createdAt = FieldValue.serverTimestamp();
-      }
-
-      tx.set(userRef, updatePayload, { merge: true });
-
-      return {
-        success: true,
-        message: "Joined the delegate room successfully",
-      };
-    });
-
-    return result;
-  });
-
-  fastify.delete("/delegate/leave", async function (request, reply) {
-    const user = request.getDecorator<DecodedIdToken>("user");
-
-    return await db.runTransaction(async (tx) => {
-      const userRef = db.collection("delegates").doc(user.uid);
-      const snapshot = await tx.get(userRef);
-
-      if (!snapshot.exists) {
-        return {
-          success: true,
-          message: "User is not part of any delegate room",
-        };
-      }
-
-      const userData = snapshot.data() as ExtendedDelegateSchema;
-
-      if (
-        !userData.selfBooking &&
-        userData.paymentStatus === PaymentStatus.Confirmed
-      ) {
-        throw new HttpError(
-          400,
-          "Can't leave a room after successful registration"
-        );
-      }
-
-      if (userData.owner) {
-        throw new HttpError(400, "User is a room owner");
-      }
-
-      if (!userData.member) {
-        return {
-          success: true,
-          message: "User is not part of any delegate room",
-        };
-      }
-
-      const roomId = userData.member;
-
-      const roomQuery = db
-        .collection("delegates")
-        .where("roomId", "==", roomId);
-      const roomSnap = await tx.get(roomQuery);
-
-      tx.update(userRef, {
-        member: FieldValue.delete(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-
-      if (roomSnap.empty) {
-        return {
-          success: true,
-          message: "Delegate room not found",
-        };
-      }
-
-      tx.update(roomSnap.docs[0].ref, {
-        [`users.${user.uid}`]: FieldValue.delete(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-
-      return {
-        success: true,
-        message: "Left the delegate room successfully",
-      };
-    });
-  });
-
-  fastify.delete("/delegate/delete", async function (request, reply) {
-    const user = request.getDecorator<DecodedIdToken>("user");
-
-    return await db.runTransaction(async (tx) => {
-      const userRef = db.collection("delegates").doc(user.uid);
-      const userSnap = await tx.get(userRef);
-
-      if (!userSnap.exists || !userSnap.data()!.owner) {
-        return {
-          success: true,
-          message: "User isn't a room owner already",
-        };
-      }
-
-      if (userSnap.data()!.paymentStatus === PaymentStatus.Confirmed) {
-        throw new HttpError(
-          400,
-          "Can't delete a room after successful registration"
-        );
-      }
-
-      const roomId = userSnap.data()!.roomId;
-      const roomUsersQuery = db
-        .collection("delegates")
-        .where("member", "==", roomId);
-      const roomUsers = await tx.get(roomUsersQuery);
-
-      tx.update(userRef, {
-        owner: false,
-        users: FieldValue.delete(),
-        roomId: FieldValue.delete(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-
-      roomUsers.docs.forEach((doc) => {
-        tx.update(doc.ref, {
-          member: FieldValue.delete(),
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      });
-
-      return {
-        success: true,
-        message: "Delegate room deleted successfully",
-      };
-    });
-  });
-
-  fastify.get("/delegate/status/user", async function (request, reply) {
-    const user = request.getDecorator<DecodedIdToken>("user");
-    const userSnap = await db.collection("delegates").doc(user.uid).get();
-
-    if (!userSnap.exists) {
-      reply.code(404);
-      return {
-        error: true,
-        isOwner: false,
-        isMember: false,
-      };
-    }
-
-    const userData = userSnap.data() as ExtendedDelegateSchema;
-
-    let paymentStatus = userData.paymentStatus;
-
-    if (
-      paymentStatus &&
-      paymentStatus !== PaymentStatus.Confirmed &&
-      userData.tiqrBookingUid
-    ) {
-      const tiqrResponse = await TiQR.fetchBooking(userData.tiqrBookingUid);
-      const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
-
-      if (tiqrData.status && tiqrData.status !== paymentStatus) {
-        paymentStatus = tiqrData.status as any;
-        await userSnap.ref.update({
-          paymentStatus: tiqrData.status,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      } else if (tiqrData.status) {
-        paymentStatus = tiqrData.status as any;
-      }
-    }
-
-    return {
-      success: true,
-      isOwner: Boolean(userData.owner),
-      isMember: Boolean(userData.member),
-      roomId: userData.roomId,
-      selfBooking: Boolean(userData.selfBooking),
-      paymentStatus,
-      paymentUrl: userData.paymentUrl,
-      users: userData.users ? Object.values(userData.users) : null,
-    };
-  });
-
-  fastify.get("/delegate/status/room/:roomId", async function (request, reply) {
-    const user = request.getDecorator<DecodedIdToken>("user");
-    const { roomId } = request.params as { roomId: string };
-    const roomSnap = await db
-      .collection("delegates")
-      .where("roomId", "==", roomId)
-      .get();
-
-    if (roomSnap.empty) {
-      reply.code(404);
-      return {
-        error: true,
-        message: "Delegate room not found",
-      };
-    }
-
-    const roomOwnerData = roomSnap.docs[0].data() as ExtendedDelegateSchema;
-  const roomOwnerRef = roomSnap.docs[0].ref;
-
-    const authorizedUserIds = [
-      roomSnap.docs[0].id,
-      ...Object.keys(roomOwnerData.users || {}),
-    ];
-
-    if (!authorizedUserIds.includes(user.uid)) {
-      reply.code(403);
-      return {
-        error: true,
-        message: "Forbidden: You are not associated with this delegate room",
-      };
-    }
-
-    let paymentStatus = roomOwnerData.paymentStatus;
-
-    if (
-      paymentStatus &&
-      paymentStatus !== PaymentStatus.Confirmed &&
-      roomOwnerData.tiqrBookingUid
-    ) {
-      const tiqrResponse = await TiQR.fetchBooking(roomOwnerData.tiqrBookingUid);
-      const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
-
-      if (tiqrData.status && tiqrData.status !== paymentStatus) {
-        paymentStatus = tiqrData.status as any;
-        await roomOwnerRef.update({
-          paymentStatus: tiqrData.status,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      } else if (tiqrData.status) {
-        paymentStatus = tiqrData.status as any;
-      }
-    }
-
-    return {
-      success: true,
-      owner: {
-        name: roomOwnerData.name,
-        email: roomOwnerData.email,
-        phone: roomOwnerData.phone,
-        college: roomOwnerData.college,
-      },
-      users: roomOwnerData.users ? Object.values(roomOwnerData.users) : null,
-      paymentStatus,
-      paymentUrl: roomOwnerData.paymentUrl,
-    };
-  });
-
-  fastify.post("/delegate/register/self", async function (request, reply) {
-    const user = request.getDecorator<DecodedIdToken>("user");
-    const body = DelegateBookSelfBody.safeParse(request.body);
-
-    if (!body.success) {
-      reply.code(400);
-      return {
-        error: true,
-        details: "Invalid request body",
-      };
-    }
-
-    const userSnap = await db.collection("delegates").doc(user.uid).get();
-
-    if (userSnap.exists) {
-      const userData = userSnap.data() as ExtendedDelegateSchema;
-
-      if (userData.owner) {
-        reply.code(400);
-        return {
-          error: true,
-          message: "Delete your existing room to register as self",
-        };
-      }
-
-      if (userData.member) {
-        reply.code(400);
-        return {
-          error: true,
-          message: "Leave your existing room to register as self",
-        };
-      }
-
-      if (
-        userData.selfBooking &&
-        userData.paymentStatus === PaymentStatus.Confirmed
-      ) {
-        reply.code(400);
-        return {
-          error: true,
-          message: "You have already registered successfully as a delegate",
-        };
-      }
-
-      if (
-        userData.selfBooking &&
-        userData.paymentStatus === PaymentStatus.PendingPayment
-      ) {
-        const payload = {} as any;
-
-        if (body.data.address !== userData.address)
-          payload.address = body.data.address;
-
-        if (body.data.college !== userData.college)
-          payload.college = body.data.college;
-
-        if (body.data.name !== userData.name) payload.name = body.data.name;
-
-        if (body.data.phone !== userData.phone) payload.phone = body.data.phone;
-
-        if (Object.keys(payload).length > 0) {
-          payload.updatedAt = FieldValue.serverTimestamp();
-        }
-
-        if (Object.keys(payload).length > 0) {
-          await userSnap.ref.update(payload);
-        }
-
-        return {
-          success: true,
-          paymentUrl: userData.paymentUrl,
-        };
-      }
-    }
-
-    const tiqrResponse = await TiQR.createBooking({
-      email: user.email ?? "",
-      first_name: body.data.name.split(" ").at(0)!,
-      last_name: body.data.name.split(" ").slice(1).join(" ") || "",
-      phone_number: body.data.phone,
-      ticket: Tickets.Delegate,
-      meta_data: {
-        address: body.data.address || "",
-        selfBooking: true,
-        college: body.data.college || "",
-      },
-    });
-
-    const tiqrData = (await tiqrResponse.json()) as BookingResponse;
-
-    const payload = {
-      selfBooking: true,
-      tiqrBookingUid: tiqrData.booking.uid,
-      paymentUrl: tiqrData.payment.url_to_redirect || "",
-      paymentStatus: tiqrData.booking.status,
-      updatedAt: FieldValue.serverTimestamp(),
-    } as ExtendedDelegateSchema;
-
-    if (!userSnap.exists) payload.createdAt = FieldValue.serverTimestamp();
-
-    await userSnap.ref.set(payload, { merge: true });
-
-    return {
-      success: true,
-      paymentUrl: tiqrData.payment.url_to_redirect,
-    };
-  });
-
-  fastify.post("/delegate/register/group", async function (request, reply) {
-    const user = request.getDecorator<DecodedIdToken>("user");
-
-    return db.runTransaction(async (tx) => {
-      const userRef = await tx.get(db.collection("delegates").doc(user.uid));
-
-      if (!userRef.exists) {
-        throw new HttpError(400, "You don't own a room");
-      }
-
-      const userData = userRef.data() as ExtendedDelegateSchema;
-
-      if (
-        userData.selfBooking &&
-        userData.paymentStatus === PaymentStatus.Confirmed
-      ) {
-        throw new HttpError(
-          400,
-          "You already have a self registrations to proceed with group registration"
-        );
-      }
-
-      if (!userData.owner || !userData.roomId) {
-        throw new HttpError(400, "You don't own a room to make a registration");
-      }
-
-      if (
-        !userData.selfBooking &&
-        userData.paymentStatus === PaymentStatus.Confirmed
-      ) {
-        return {
-          success: true,
-          status: PaymentStatus.Confirmed,
-          message: "You have already registered successfully as a delegate",
-        };
-      }
-
-      const members = await tx.get(
-        db.collection("delegates").where("member", "==", userData.roomId)
-      );
-
-      if (members.docs.length !== Object.keys(userData.users || {}).length) {
-        throw new HttpError(400, "There's a mismatch in room members data");
-      }
-
-      const dbPayload: ExtendedDelegateSchema = {
-        selfBooking: false,
-        updatedAt: FieldValue.serverTimestamp(),
-      };
-
-      const bookingPayload: BookingPayload[] = [
-        {
-          first_name: userData.name.split(" ").at(0)!,
-          last_name: userData.name.split(" ").slice(1).join(" ") || "",
-          email: user.email ?? "",
-          phone_number: userData.phone,
-          ticket: Tickets.Delegate,
-        },
-      ];
-
-      userData.users &&
-        Object.values(userData.users).forEach((member, i) => {
-          const payload: BookingPayload = {
-            first_name: member.name.split(" ").at(0)!,
-            last_name: member.name.split(" ").slice(1).join(" ") || "",
-            email: member.email,
-            ticket: Tickets.Delegate,
-            phone_number: member.phone,
-            meta_data: {
-              uid: Object.keys(userData.users!)[i],
-            },
+        if (
+          !userData.selfBooking &&
+          userData.paymentStatus === PaymentStatus.Confirmed
+        ) {
+          return {
+            success: true,
+            status: PaymentStatus.Confirmed,
+            message: "You have already registered successfully as a delegate",
           };
+        }
 
-          if ((i + 1) % 6 === 0) payload.ticket = Tickets.DelegateComplimentary;
-
-          bookingPayload.push(payload);
-        });
-
-      const tiqrBookingData = await TiQR.createBulkBooking({
-        bookings: bookingPayload,
-      });
-
-      const tiqrData = (await tiqrBookingData.json()) as BulkBookingResponse;
-
-      dbPayload.tiqrBookingUid = tiqrData.booking.uid;
-      dbPayload.paymentUrl = tiqrData.payment.url_to_redirect || "";
-      dbPayload.paymentStatus = tiqrData.booking.status as PaymentStatus;
-
-      const membersRef = [];
-
-      for (const childBooking of tiqrData.booking.child_bookings) {
-        if (!childBooking.meta_data?.uid)
-          throw new HttpError(400, "Enable to register, try again.");
-
-        const memberSnap = await tx.get(
-          db.collection("delegates").doc(childBooking.meta_data.uid)
+        const members = await tx.get(
+          db.collection("delegates").where("member", "==", userData.roomId)
         );
 
-        if (!memberSnap.exists)
-          throw new HttpError(400, "One of the members does not exist");
+        if (members.docs.length !== Object.keys(userData.users || {}).length) {
+          throw new HttpError(400, "There's a mismatch in room members data");
+        }
 
-        membersRef.push({
-          snap: memberSnap,
-          status: childBooking.status as PaymentStatus,
-          uid: childBooking.meta_data.uid,
-        });
-      }
-
-      for (const memberSnap of membersRef) {
-        tx.update(memberSnap.snap.ref, {
+        const dbPayload: ExtendedDelegateSchema = {
           selfBooking: false,
-          tiqrBookingUid: memberSnap.uid,
-          paymentStatus: memberSnap.status,
           updatedAt: FieldValue.serverTimestamp(),
+        };
+
+        const bookingPayload: BookingPayload[] = [
+          {
+            first_name: userData.name.split(" ").at(0)!,
+            last_name: userData.name.split(" ").slice(1).join(" ") || "",
+            email: user.email ?? "",
+            phone_number: userData.phone,
+            ticket: Tickets.Delegate,
+          },
+        ];
+
+        userData.users &&
+          Object.values(userData.users).forEach((member, i) => {
+            const payload: BookingPayload = {
+              first_name: member.name.split(" ").at(0)!,
+              last_name: member.name.split(" ").slice(1).join(" ") || "",
+              email: member.email,
+              ticket: Tickets.Delegate,
+              phone_number: member.phone,
+              meta_data: {
+                uid: Object.keys(userData.users!)[i],
+              },
+            };
+
+            if ((i + 1) % 6 === 0)
+              payload.ticket = Tickets.DelegateComplimentary;
+
+            bookingPayload.push(payload);
+          });
+
+        const tiqrBookingData = await TiQR.createBulkBooking({
+          bookings: bookingPayload,
+        });
+
+        const tiqrData = (await tiqrBookingData.json()) as BulkBookingResponse;
+
+        dbPayload.tiqrBookingUid = tiqrData.booking.uid;
+        dbPayload.paymentUrl = tiqrData.payment.url_to_redirect || "";
+        dbPayload.paymentStatus = tiqrData.booking.status as PaymentStatus;
+
+        const membersRef = [];
+
+        for (const childBooking of tiqrData.booking.child_bookings) {
+          if (!childBooking.meta_data?.uid)
+            throw new HttpError(400, "Enable to register, try again.");
+
+          const memberSnap = await tx.get(
+            db.collection("delegates").doc(childBooking.meta_data.uid)
+          );
+
+          if (!memberSnap.exists)
+            throw new HttpError(400, "One of the members does not exist");
+
+          membersRef.push({
+            snap: memberSnap,
+            status: childBooking.status as PaymentStatus,
+            uid: childBooking.meta_data.uid,
+          });
+        }
+
+        for (const memberSnap of membersRef) {
+          tx.update(memberSnap.snap.ref, {
+            selfBooking: false,
+            tiqrBookingUid: memberSnap.uid,
+            paymentStatus: memberSnap.status,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+
+        tx.update(userRef.ref, dbPayload);
+
+        return {
+          success: true,
+          paymentUrl: tiqrData.payment.url_to_redirect,
+        };
+      });
+    } catch (error) {
+      if (error instanceof HttpError) {
+        return reply.code(error.statusCode).send({
+          error: true,
+          message: error.message,
+          details: error.error,
         });
       }
-
-      tx.update(userRef.ref, dbPayload);
-
-      return {
-        success: true,
-        paymentUrl: tiqrData.payment.url_to_redirect,
-      };
-    });
+      throw error;
+    }
   });
 
   // LEGACY ENDPOINTS
