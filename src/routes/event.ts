@@ -117,7 +117,7 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
     )
       payload.members = body.data.members;
 
-    if (body.data.isBitStudent && user.email && isBitEmail(user.email)) {
+    if (user.email && isBitEmail(user.email)) {
       payload.isBitStudent = true;
       payload.status = PaymentStatus.Confirmed;
       payload.paymentUrl = "";
@@ -130,15 +130,11 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
         success: true,
         message: "Booking created successfully",
       };
-    } else if (body.data.isBitStudent) {
-      reply.status(403);
-      return {
-        error: true,
-        message: "Invalid BIT email address",
-      };
     }
 
-    if (body.data.isAlumni && SoloEvents.includes(body.data.eventId)) {
+    if (SoloEvents.includes(body.data.eventId)) {
+      fastify.log.info("Solo event booking - checking alumni/delegate status");
+
       const alumniSnap = await db
         .collection("alumni_registrations")
         .where("firebaseUid", "==", user.uid)
@@ -163,43 +159,29 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
             message: "Booking created successfully",
           };
         }
-      }
-    }
+      } else {
+        const delegateUser = await db
+          .collection("delegates")
+          .doc(user.uid)
+          .get();
 
-    if (body.data.isDelegate) {
-      const delegateUser = await db.collection("delegate").doc(user.uid).get();
+        if (delegateUser.exists) {
+          if (delegateUser.data()!.paymentStatus === PaymentStatus.Confirmed) {
+            payload.isDelegate = true;
 
-      if (!delegateUser.exists) {
-        reply.status(403);
-        return {
-          error: true,
-          message: "You are not registered as a delegate",
-        };
-      }
+            payload.status = PaymentStatus.Confirmed;
+            payload.paymentUrl = "";
 
-      if (delegateUser.data()!.paymentStatus != PaymentStatus.Confirmed) {
-        reply.status(403);
-        return {
-          error: true,
-          message: "Your delegate registration is not confirmed",
-        };
-      }
+            await userSnap.ref.update({
+              [`events.${body.data.eventId}`]: payload,
+            });
 
-      payload.isDelegate = true;
-
-      // Delegates get free bookings only for solo events.
-      if (SoloEvents.includes(body.data.eventId)) {
-        payload.status = PaymentStatus.Confirmed;
-        payload.paymentUrl = "";
-
-        await userSnap.ref.update({
-          [`events.${body.data.eventId}`]: payload,
-        });
-
-        return {
-          success: true,
-          message: "Booking created successfully",
-        };
+            return {
+              success: true,
+              message: "Booking created successfully",
+            };
+          }
+        }
       }
     }
 
