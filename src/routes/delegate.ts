@@ -627,117 +627,115 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
     try {
       const user = request.getDecorator<DecodedIdToken>("user");
 
-      return db.runTransaction(async (tx) => {
-        const userRef = await tx.get(db.collection("delegates").doc(user.uid));
+      // Step 1: Validation and Data Gathering (Non-Transactional Read)
+      const userSnap = await db.collection("delegates").doc(user.uid).get();
 
-        if (!userRef.exists) {
-          throw new HttpError(400, "You don't own a room");
-        }
+      if (!userSnap.exists) {
+        throw new HttpError(400, "You don't own a room");
+      }
 
-        const userData = userRef.data() as ExtendedDelegateSchema;
+      const userData = userSnap.data() as ExtendedDelegateSchema;
 
-        if (
-          userData.selfBooking &&
-          userData.paymentStatus === PaymentStatus.Confirmed
-        ) {
-          throw new HttpError(
-            400,
-            "You already have a self registrations to proceed with group registration"
-          );
-        }
-
-        if (!userData.owner || !userData.roomId) {
-          throw new HttpError(
-            400,
-            "You don't own a room to make a registration"
-          );
-        }
-
-        if (
-          !userData.selfBooking &&
-          userData.paymentStatus === PaymentStatus.Confirmed
-        ) {
-          return {
-            success: true,
-            status: PaymentStatus.Confirmed,
-            message: "You have already registered successfully as a delegate",
-          };
-        }
-
-        const members = await tx.get(
-          db.collection("delegates").where("member", "==", userData.roomId)
+      if (
+        userData.selfBooking &&
+        userData.paymentStatus === PaymentStatus.Confirmed
+      ) {
+        throw new HttpError(
+          400,
+          "You already have a self registrations to proceed with group registration"
         );
+      }
 
-        if (members.docs.length !== Object.keys(userData.users || {}).length) {
-          throw new HttpError(400, "There's a mismatch in room members data");
-        }
+      if (!userData.owner || !userData.roomId) {
+        throw new HttpError(400, "You don't own a room to make a registration");
+      }
 
-        const dbPayload: ExtendedDelegateSchema = {
-          selfBooking: false,
-          updatedAt: FieldValue.serverTimestamp(),
+      if (
+        !userData.selfBooking &&
+        userData.paymentStatus === PaymentStatus.Confirmed
+      ) {
+        return {
+          success: true,
+          status: PaymentStatus.Confirmed,
+          message: "You have already registered successfully as a delegate",
         };
+      }
 
-        const bookingPayload: BookingPayload[] = [
-          {
-            first_name: userData.name.split(" ").at(0)!,
-            last_name: userData.name.split(" ").slice(1).join(" ") || "",
-            email: user.email ?? "",
-            phone_number: userData.phone,
+      const membersQuery = await db
+        .collection("delegates")
+        .where("member", "==", userData.roomId)
+        .get();
+
+      if (
+        membersQuery.docs.length !== Object.keys(userData.users || {}).length
+      ) {
+        throw new HttpError(400, "There's a mismatch in room members data");
+      }
+
+      const bookingPayload: BookingPayload[] = [
+        {
+          first_name: userData.name.split(" ").at(0)!,
+          last_name: userData.name.split(" ").slice(1).join(" ") || "",
+          email: user.email ?? "",
+          phone_number: userData.phone,
+          ticket: Tickets.Delegate,
+        },
+      ];
+
+      userData.users &&
+        Object.values(userData.users).forEach((member, i) => {
+          const payload: BookingPayload = {
+            first_name: member.name.split(" ").at(0)!,
+            last_name: member.name.split(" ").slice(1).join(" ") || "",
+            email: member.email,
             ticket: Tickets.Delegate,
-          },
-        ];
+            phone_number: member.phone,
+            meta_data: {
+              uid: Object.keys(userData.users!)[i],
+            },
+          };
 
-        userData.users &&
-          Object.values(userData.users).forEach((member, i) => {
-            const payload: BookingPayload = {
-              first_name: member.name.split(" ").at(0)!,
-              last_name: member.name.split(" ").slice(1).join(" ") || "",
-              email: member.email,
-              ticket: Tickets.Delegate,
-              phone_number: member.phone,
-              meta_data: {
-                uid: Object.keys(userData.users!)[i],
-              },
-            };
+          if ((i + 1) % 6 === 0) payload.ticket = Tickets.DelegateComplimentary;
 
-            if ((i + 1) % 6 === 0)
-              payload.ticket = Tickets.DelegateComplimentary;
-
-            bookingPayload.push(payload);
-          });
-
-        const tiqrBookingData = await TiQR.createBulkBooking({
-          bookings: bookingPayload,
+          bookingPayload.push(payload);
         });
 
-        const tiqrData = (await tiqrBookingData.json()) as BulkBookingResponse;
+      // Step 2: External API Call (Outside Transaction)
+      const tiqrBookingData = await TiQR.createBulkBooking({
+        bookings: bookingPayload,
+      });
 
-        dbPayload.tiqrBookingUid = tiqrData.booking.uid;
-        dbPayload.paymentUrl = tiqrData.payment.url_to_redirect || "";
-        dbPayload.paymentStatus = tiqrData.booking.status as PaymentStatus;
+      const tiqrData = (await tiqrBookingData.json()) as BulkBookingResponse;
 
+      // Step 3: Persistence (Transactional)
+      return db.runTransaction(async (tx) => {
+        // We re-fetch important references to ensure we're updating the right docs
         const membersRef = [];
 
         for (const childBooking of tiqrData.booking.child_bookings) {
-          if (!childBooking.meta_data?.uid)
-            throw new HttpError(400, "Enable to register, try again.");
+          if (!childBooking.meta_data?.uid) continue;
 
-          const memberSnap = await tx.get(
-            db.collection("delegates").doc(childBooking.meta_data.uid)
-          );
-
-          if (!memberSnap.exists)
-            throw new HttpError(400, "One of the members does not exist");
+          const memberRef = db
+            .collection("delegates")
+            .doc(childBooking.meta_data.uid);
 
           membersRef.push({
-            snap: memberSnap,
+            ref: memberRef,
             status: childBooking.status as PaymentStatus,
             uid: childBooking.meta_data.uid,
           });
         }
 
+        const dbPayload: ExtendedDelegateSchema = {
+          selfBooking: false,
+          tiqrBookingUid: tiqrData.booking.uid,
+          paymentUrl: tiqrData.payment.url_to_redirect || "",
+          paymentStatus: tiqrData.booking.status as PaymentStatus,
+          updatedAt: FieldValue.serverTimestamp(),
+        };
+
         for (const memberSnap of membersRef) {
-          tx.update(memberSnap.snap.ref, {
+          tx.update(memberSnap.ref, {
             selfBooking: false,
             tiqrBookingUid: memberSnap.uid,
             paymentStatus: memberSnap.status,
@@ -745,7 +743,8 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
           });
         }
 
-        tx.update(userRef.ref, dbPayload);
+        const userRef = db.collection("delegates").doc(user.uid);
+        tx.update(userRef, dbPayload);
 
         return {
           success: true,
