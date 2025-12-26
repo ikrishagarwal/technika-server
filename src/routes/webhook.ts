@@ -1,4 +1,5 @@
 import { FastifyPluginAsync } from "fastify";
+import crypto from "node:crypto";
 import Sentry from "@sentry/node";
 import { TiQR, BookingResponse } from "../lib/tiqr";
 import { EventMappings, EventTickets, Tickets } from "../constants";
@@ -7,7 +8,8 @@ import { FieldValue } from "firebase-admin/firestore";
 
 const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
   fastify.addHook("onRequest", async (request, reply) => {
-    const token = request.headers["x-webhook-token"];
+    const tokenHeader = request.headers["x-webhook-token"];
+    const token = (Array.isArray(tokenHeader) ? tokenHeader[0] : tokenHeader) || "";
     const webhookToken = process.env.WEBHOOK_TOKEN;
 
     if (!webhookToken) {
@@ -20,7 +22,22 @@ const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
         });
     }
 
-    if (token !== webhookToken) {
+    if (token.length !== webhookToken.length) {
+      fastify.log.warn("Unauthorized webhook access attempt");
+      return reply //
+        .code(401)
+        .send({
+          error: true,
+          message: "Unauthorized",
+        });
+    }
+
+    if (
+      !crypto.timingSafeEqual(
+        Buffer.from(token),
+        Buffer.from(webhookToken)
+      )
+    ) {
       fastify.log.warn("Unauthorized webhook access attempt");
       return reply //
         .code(401)
@@ -34,13 +51,37 @@ const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
   fastify.post("/webhook", async function (request, reply) {
     const body = request.body as WebhookPayload;
 
-    fastify.log.info("Received webhook:");
-    fastify.log.info(body);
+    const safeLogBody: Record<string, any> = {};
+    const allowedFields = [
+      "booking_status",
+      "booking_uid",
+      "email",
+      "event_name",
+      "first_name",
+      "last_name",
+      "name",
+      "phone_number",
+      "quantity",
+      "ticket_type",
+      "ticket_price",
+    ];
+
+    for (const key of allowedFields) {
+      if (key in body) {
+        // @ts-ignore
+        safeLogBody[key] = body[key];
+      }
+    }
+
+    fastify.log.info({
+      msg: "Received webhook",
+      payload: safeLogBody,
+    });
 
     Sentry.captureMessage("Received webhook", {
       level: "info",
       extra: {
-        payload: body,
+        payload: safeLogBody,
       },
     });
 

@@ -8,7 +8,8 @@ export async function validateAuthToken(request: FastifyRequest) {
 
   const token = auth.slice(7);
   try {
-    return await admin.auth().verifyIdToken(token);
+    const checkRevoked = process.env.NODE_ENV !== "development";
+    return await admin.auth().verifyIdToken(token, checkRevoked);
   } catch {
     return null;
   }
