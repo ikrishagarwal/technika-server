@@ -298,11 +298,7 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
 
     const userData = userSnap.data() as EventSchema;
 
-    if (
-      !userData.events ||
-      !userData.events[eventId] ||
-      !userData.events[eventId].tiqrBookingUid
-    ) {
+    if (!userData.events || !userData.events[eventId]) {
       reply.code(404);
       return {
         error: true,
@@ -310,7 +306,9 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
       };
     }
 
-    if (userData.events[eventId].status === PaymentStatus.Confirmed) {
+    const eventData = userData.events[eventId];
+
+    if (eventData.status === PaymentStatus.Confirmed) {
       reply.code(200);
       return {
         success: true,
@@ -319,20 +317,36 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
         phone: userData.phone,
         college: userData.college,
         name: userData.name,
-        members: userData.events[eventId].members,
+        members: eventData.members,
         status: PaymentStatus.Confirmed,
         message: "Registration confirmed",
       };
     }
 
+    if (!eventData.tiqrBookingUid) {
+      // No booking uid to refresh from provider; return stored status.
+      reply.code(200);
+      return {
+        success: true,
+        isBitStudent: userData.isBitStudent || false,
+        isDelegate: userData.isDelegate || false,
+        status: eventData.status,
+        phone: userData.phone,
+        college: userData.college,
+        name: userData.name,
+        members: eventData.members,
+        message: "Status fetched successfully",
+      };
+    }
+
     const tiqrResponse = await TiQR.fetchBooking(
-      userData.events[eventId].tiqrBookingUid
+      eventData.tiqrBookingUid
     );
     const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
 
     if (
       tiqrData.status &&
-      tiqrData.status !== userData.events[eventId].status
+      tiqrData.status !== eventData.status
     ) {
       await userSnap.ref.update({
         [`events.${eventId}.status`]: tiqrData.status,

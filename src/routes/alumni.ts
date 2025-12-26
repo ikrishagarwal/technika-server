@@ -177,6 +177,18 @@ const alumni: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     const docRef = snapshot.docs[0].ref;
     const doc = snapshot.docs[0].data();
 
+    if (doc.paymentStatus === PaymentStatus.Confirmed) {
+      reply.status(200);
+      return {
+        status: PaymentStatus.Confirmed,
+        details: {
+          name: doc.fullName,
+          merchName: doc.merchName,
+          size: doc.tShirtSize,
+        },
+      };
+    }
+
     const tiqrResponse = await TiQR.fetchBooking(doc.tiqrBookingUid);
     const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
 

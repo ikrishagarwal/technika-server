@@ -338,13 +338,34 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
 
     const userData = userSnap.data() as ExtendedDelegateSchema;
 
+    let paymentStatus = userData.paymentStatus;
+
+    if (
+      paymentStatus &&
+      paymentStatus !== PaymentStatus.Confirmed &&
+      userData.tiqrBookingUid
+    ) {
+      const tiqrResponse = await TiQR.fetchBooking(userData.tiqrBookingUid);
+      const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
+
+      if (tiqrData.status && tiqrData.status !== paymentStatus) {
+        paymentStatus = tiqrData.status as any;
+        await userSnap.ref.update({
+          paymentStatus: tiqrData.status,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } else if (tiqrData.status) {
+        paymentStatus = tiqrData.status as any;
+      }
+    }
+
     return {
       success: true,
       isOwner: Boolean(userData.owner),
       isMember: Boolean(userData.member),
       roomId: userData.roomId,
       selfBooking: Boolean(userData.selfBooking),
-      paymentStatus: userData.paymentStatus,
+      paymentStatus,
       paymentUrl: userData.paymentUrl,
       users: userData.users ? Object.values(userData.users) : null,
     };
@@ -367,6 +388,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
     }
 
     const roomOwnerData = roomSnap.docs[0].data() as ExtendedDelegateSchema;
+  const roomOwnerRef = roomSnap.docs[0].ref;
 
     const authorizedUserIds = [
       roomSnap.docs[0].id,
@@ -381,6 +403,27 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       };
     }
 
+    let paymentStatus = roomOwnerData.paymentStatus;
+
+    if (
+      paymentStatus &&
+      paymentStatus !== PaymentStatus.Confirmed &&
+      roomOwnerData.tiqrBookingUid
+    ) {
+      const tiqrResponse = await TiQR.fetchBooking(roomOwnerData.tiqrBookingUid);
+      const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
+
+      if (tiqrData.status && tiqrData.status !== paymentStatus) {
+        paymentStatus = tiqrData.status as any;
+        await roomOwnerRef.update({
+          paymentStatus: tiqrData.status,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } else if (tiqrData.status) {
+        paymentStatus = tiqrData.status as any;
+      }
+    }
+
     return {
       success: true,
       owner: {
@@ -390,7 +433,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         college: roomOwnerData.college,
       },
       users: roomOwnerData.users ? Object.values(roomOwnerData.users) : null,
-      paymentStatus: roomOwnerData.paymentStatus,
+      paymentStatus,
       paymentUrl: roomOwnerData.paymentUrl,
     };
   });
@@ -966,6 +1009,45 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
     const response = {
       success: false,
     } as any;
+
+    // Refresh from TiQR if not confirmed
+    if (
+      userData.self?.tiqrBookingUid &&
+      userData.self.paymentStatus &&
+      userData.self.paymentStatus !== PaymentStatus.Confirmed
+    ) {
+      const tiqrResponse = await TiQR.fetchBooking(userData.self.tiqrBookingUid);
+      const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
+
+      if (tiqrData.status && tiqrData.status !== userData.self.paymentStatus) {
+        await userSnap.ref.update({
+          "self.paymentStatus": tiqrData.status,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        userData.self.paymentStatus = tiqrData.status as any;
+      } else if (tiqrData.status) {
+        userData.self.paymentStatus = tiqrData.status as any;
+      }
+    }
+
+    if (
+      userData.group?.tiqrBookingUid &&
+      userData.group.paymentStatus &&
+      userData.group.paymentStatus !== PaymentStatus.Confirmed
+    ) {
+      const tiqrResponse = await TiQR.fetchBooking(userData.group.tiqrBookingUid);
+      const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
+
+      if (tiqrData.status && tiqrData.status !== userData.group.paymentStatus) {
+        await userSnap.ref.update({
+          "group.paymentStatus": tiqrData.status,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        userData.group.paymentStatus = tiqrData.status as any;
+      } else if (tiqrData.status) {
+        userData.group.paymentStatus = tiqrData.status as any;
+      }
+    }
 
     if (userData.self?.paymentStatus) {
       response.success = true;
