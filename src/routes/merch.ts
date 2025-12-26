@@ -152,6 +152,7 @@ const Merch: FastifyPluginAsync = async (fastify): Promise<void> => {
       reply.code(200);
       return {
         success: true,
+        item: order.item,
         orderId: id,
         status: PaymentStatus.Confirmed,
         paymentUrl: order.paymentUrl,
@@ -175,6 +176,7 @@ const Merch: FastifyPluginAsync = async (fastify): Promise<void> => {
       orderId: id,
       status: tiqrData.status,
       paymentUrl: order.paymentUrl,
+      item: order.item,
       checksum:
         tiqrData.status === PaymentStatus.Confirmed ? tiqrData.checksum : null,
     };
@@ -184,7 +186,8 @@ const Merch: FastifyPluginAsync = async (fastify): Promise<void> => {
 const MerchItemPayload = z.object({
   type: z.enum(["tee", "jacket", "combo"]),
   quantity: z.number().int().min(1).default(1),
-  size: z.string().min(1).optional(),
+  size: z.string().min(1),
+  tShirtSize: z.string().min(1).optional(),
 });
 
 const MerchOrderPayload = z.object({
