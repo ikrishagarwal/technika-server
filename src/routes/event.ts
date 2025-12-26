@@ -56,6 +56,63 @@ const Event: FastifyPluginAsync = async (fastify): Promise<any> => {
       EventIdToPriceMap[body.data.eventId as keyof typeof EventIdToPriceMap];
 
     if (!eventPrice) {
+      if (Object.keys(EventIdToPriceMap).includes(String(body.data.eventId))) {
+        fastify.log.info("Free event booking - confirming registration");
+
+        let userSnap = await db
+          .collection("event_registrations")
+          .doc(user.uid)
+          .get();
+
+        if (!userSnap.exists) {
+          await userSnap.ref.set({
+            email: user.email,
+            name: body.data.name,
+            phone: body.data.phone,
+            college: body.data.college,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+
+          userSnap = await userSnap.ref.get();
+        }
+
+        const userData = userSnap.data() as EventSchema;
+
+        if (
+          userData.events &&
+          userData.events[body.data.eventId]?.status === PaymentStatus.Confirmed
+        ) {
+          reply.status(400);
+          return {
+            error: true,
+            message: "You have already registered for this event",
+          };
+        }
+
+        const payload = {
+          type: body.data.type,
+          updatedAt: FieldValue.serverTimestamp(),
+          status: PaymentStatus.Confirmed,
+          paymentUrl: "",
+        } as Partial<EventSchema["events"][number]>;
+
+        if (
+          body.data.members &&
+          body.data.type === "group" &&
+          body.data.members.length > 0
+        )
+          payload.members = body.data.members;
+        await userSnap.ref.update({
+          [`events.${body.data.eventId}`]: payload,
+        });
+
+        return {
+          success: true,
+          message: "Booking created successfully",
+        };
+      }
+
       reply.status(400);
       return {
         error: true,

@@ -96,14 +96,14 @@ export const EventIdToPriceMap = {
   121: 149, // poetry_hindi
 
   // Fun
-  201: undefined, // escape_room (on-spot / not fixed)
+  // 201: undefined, // escape_room (on-spot / not fixed)
 
   // ESports
-  301: 249, // bgmi
+  301: 0, // bgmi - free
   302: 249, // valorant
   303: undefined, // fifa (on-spot)
   304: undefined, // tekken (on-spot)
-  305: 199, // free_fire
+  305: 0, // cricket
 };
 
 export const SoloEvents = [
