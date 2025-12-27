@@ -9,7 +9,8 @@ import { FieldValue } from "firebase-admin/firestore";
 const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
   fastify.addHook("onRequest", async (request, reply) => {
     const tokenHeader = request.headers["x-webhook-token"];
-    const token = (Array.isArray(tokenHeader) ? tokenHeader[0] : tokenHeader) || "";
+    const token =
+      (Array.isArray(tokenHeader) ? tokenHeader[0] : tokenHeader) || "";
     const webhookToken = process.env.WEBHOOK_TOKEN;
 
     if (!webhookToken) {
@@ -33,10 +34,7 @@ const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
     }
 
     if (
-      !crypto.timingSafeEqual(
-        Buffer.from(token),
-        Buffer.from(webhookToken)
-      )
+      !crypto.timingSafeEqual(Buffer.from(token), Buffer.from(webhookToken))
     ) {
       fastify.log.warn("Unauthorized webhook access attempt");
       return reply //

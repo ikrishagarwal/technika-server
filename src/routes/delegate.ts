@@ -48,13 +48,10 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         if (snapshot.exists) {
           const data = snapshot.data() as ExtendedDelegateSchema;
 
-          if (
-            data.selfBooking &&
-            data.paymentStatus === PaymentStatus.Confirmed
-          ) {
+          if (data.paymentStatus === PaymentStatus.Confirmed) {
             throw new HttpError(
               400,
-              "User has already registered as a self-booking delegate"
+              "User has already registered as a delegate"
             );
           }
 
@@ -132,13 +129,10 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         if (userSnap.exists) {
           const userData = userSnap.data() as ExtendedDelegateSchema;
 
-          if (
-            userData.selfBooking &&
-            userData.paymentStatus === PaymentStatus.Confirmed
-          ) {
+          if (userData.paymentStatus === PaymentStatus.Confirmed) {
             throw new HttpError(
               400,
-              "User has already registered as a self-booking delegate"
+              "User has already registered as a delegate"
             );
           }
 
@@ -246,10 +240,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
 
         const userData = snapshot.data() as ExtendedDelegateSchema;
 
-        if (
-          !userData.selfBooking &&
-          userData.paymentStatus === PaymentStatus.Confirmed
-        ) {
+        if (userData.paymentStatus === PaymentStatus.Confirmed) {
           throw new HttpError(
             400,
             "Can't leave a room after successful registration"
@@ -409,7 +400,6 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         isOwner: Boolean(userData.owner),
         isMember: Boolean(userData.member),
         roomId: userData.roomId,
-        selfBooking: Boolean(userData.selfBooking),
         paymentStatus,
         paymentUrl: userData.paymentUrl,
         users: userData.users ? Object.values(userData.users) : null,
@@ -466,7 +456,9 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         paymentStatus !== PaymentStatus.Confirmed &&
         roomOwnerData.tiqrBookingUid
       ) {
-        const tiqrResponse = await TiQR.fetchBooking(roomOwnerData.tiqrBookingUid);
+        const tiqrResponse = await TiQR.fetchBooking(
+          roomOwnerData.tiqrBookingUid
+        );
         const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
 
         if (tiqrData.status && tiqrData.status !== paymentStatus) {
@@ -538,10 +530,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
           };
         }
 
-        if (
-          userData.selfBooking &&
-          userData.paymentStatus === PaymentStatus.Confirmed
-        ) {
+        if (userData.paymentStatus === PaymentStatus.Confirmed) {
           reply.code(400);
           return {
             error: true,
@@ -550,8 +539,8 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         }
 
         if (
-          userData.selfBooking &&
-          userData.paymentStatus === PaymentStatus.PendingPayment
+          userData.paymentStatus === PaymentStatus.PendingPayment &&
+          userData.paymentUrl
         ) {
           const payload = {} as any;
 
@@ -563,7 +552,8 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
 
           if (body.data.name !== userData.name) payload.name = body.data.name;
 
-          if (body.data.phone !== userData.phone) payload.phone = body.data.phone;
+          if (body.data.phone !== userData.phone)
+            payload.phone = body.data.phone;
 
           if (Object.keys(payload).length > 0) {
             payload.updatedAt = FieldValue.serverTimestamp();
@@ -588,7 +578,6 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         ticket: Tickets.Delegate,
         meta_data: {
           address: body.data.address || "",
-          selfBooking: true,
           college: body.data.college || "",
         },
       });
@@ -636,24 +625,11 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
 
       const userData = userSnap.data() as ExtendedDelegateSchema;
 
-      if (
-        userData.selfBooking &&
-        userData.paymentStatus === PaymentStatus.Confirmed
-      ) {
-        throw new HttpError(
-          400,
-          "You already have a self registrations to proceed with group registration"
-        );
-      }
-
       if (!userData.owner || !userData.roomId) {
         throw new HttpError(400, "You don't own a room to make a registration");
       }
 
-      if (
-        !userData.selfBooking &&
-        userData.paymentStatus === PaymentStatus.Confirmed
-      ) {
+      if (userData.paymentStatus === PaymentStatus.Confirmed) {
         return {
           success: true,
           status: PaymentStatus.Confirmed,
@@ -739,6 +715,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
             selfBooking: false,
             tiqrBookingUid: memberSnap.uid,
             paymentStatus: memberSnap.status,
+            paymentUrl: FieldValue.delete(),
             updatedAt: FieldValue.serverTimestamp(),
           });
         }
@@ -1107,7 +1084,9 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       userData.self.paymentStatus &&
       userData.self.paymentStatus !== PaymentStatus.Confirmed
     ) {
-      const tiqrResponse = await TiQR.fetchBooking(userData.self.tiqrBookingUid);
+      const tiqrResponse = await TiQR.fetchBooking(
+        userData.self.tiqrBookingUid
+      );
       const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
 
       if (tiqrData.status && tiqrData.status !== userData.self.paymentStatus) {
@@ -1126,7 +1105,9 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
       userData.group.paymentStatus &&
       userData.group.paymentStatus !== PaymentStatus.Confirmed
     ) {
-      const tiqrResponse = await TiQR.fetchBooking(userData.group.tiqrBookingUid);
+      const tiqrResponse = await TiQR.fetchBooking(
+        userData.group.tiqrBookingUid
+      );
       const tiqrData = (await tiqrResponse.json()) as FetchBookingResponse;
 
       if (tiqrData.status && tiqrData.status !== userData.group.paymentStatus) {
