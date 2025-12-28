@@ -592,7 +592,14 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         updatedAt: FieldValue.serverTimestamp(),
       } as ExtendedDelegateSchema;
 
-      if (!userSnap.exists) payload.createdAt = FieldValue.serverTimestamp();
+      if (!userSnap.exists) {
+        payload.createdAt = FieldValue.serverTimestamp();
+        payload.email = user.email;
+        payload.name = body.data.name;
+        payload.phone = body.data.phone;
+        payload.college = body.data.college;
+        payload.address = body.data.address || "";
+      }
 
       await userSnap.ref.set(payload, { merge: true });
 
