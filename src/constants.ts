@@ -59,7 +59,7 @@ export const EventTickets = Object.values(TicketPriceToIdMap);
 export const EventIdToPriceMap = {
   // Technical
   1: 499, // hackathon
-  2: 199, // cp
+  2: 99, // cp
   3: 199, // ampere_assemble
   4: 499, // robo_war
   5: 499, // robo_soccer
