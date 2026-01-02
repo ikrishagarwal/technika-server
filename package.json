@@ -6,10 +6,8 @@
   "scripts": {
     "build:ts": "tsc",
     "watch:ts": "tsc -w",
-    "watch:start": "nodemon -w ./dist --enable-source-maps dist/server.js",
-    "start": "pnpm run build:ts && node dist/server.js",
-    "dev": "pnpm run build:ts && concurrently -k -p \"[{name}]\" -n \"TypeScript,App\" -c \"yellow.bold,cyan.bold\" \"pnpm:watch:ts\" \"pnpm:dev:start\"",
-    "dev:start": "node --enable-source-maps dist/server.js"
+    "dev": "tsx watch src/server.ts",
+    "start": "node --enable-source-maps dist/server.js"
   },
   "keywords": [],
   "author": "",
@@ -29,8 +27,8 @@
   "devDependencies": {
     "@types/node": "^24.0.8",
     "@types/ws": "^8.5.4",
-    "concurrently": "^9.0.0",
     "fastify-tsconfig": "^3.0.0",
+    "tsx": "^4.21.0",
     "typescript": "~5.9.2"
   }
 }

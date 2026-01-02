@@ -3,6 +3,9 @@ export const FRONT_END_BASE_URL =
   process.env.FRONT_END_BASE_URL || "https://technika.co";
 export const ApiToken = process.env.API_TOKEN || "";
 export const WebhookSecret = process.env.WEBHOOK_TOKEN || "";
+export const BIT_EMAILS = process.env.BIT_EMAILS
+  ? JSON.parse(process.env.BIT_EMAILS)
+  : [];
 
 export const PaymentBaseUrl = "https://payments.juspay.in/payment-page/order/";
 
