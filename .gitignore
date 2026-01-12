@@ -22,3 +22,5 @@ dist
 # sensitive files
 .env
 serviceAccountKey.json
+
+*.csv
