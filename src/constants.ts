@@ -43,7 +43,8 @@ export const AllowedTicketIds = process.env["TICKETS"]
   : [];
 
 export const TicketPriceToIdMap = {
-  99: 2466,
+   19: 2580,
+   99: 2466,
   199: 2454,
   149: 2455,
   299: 2456,
@@ -59,7 +60,7 @@ export const EventTickets = Object.values(TicketPriceToIdMap);
 export const EventIdToPriceMap = {
   // Technical
   1: 499, // hackathon
-  2: 199, // cp
+  2: 19, // cp
   3: 199, // ampere_assemble
   4: 499, // robo_war
   5: 499, // robo_soccer
