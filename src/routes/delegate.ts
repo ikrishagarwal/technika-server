@@ -544,15 +544,16 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         ) {
           const payload = {} as any;
 
-          if (body.data.address !== userData.address)
+          if (body.data.address && body.data.address !== userData.address)
             payload.address = body.data.address;
 
-          if (body.data.college !== userData.college)
+          if (body.data.college && body.data.college !== userData.college)
             payload.college = body.data.college;
 
-          if (body.data.name !== userData.name) payload.name = body.data.name;
+          if (body.data.name && body.data.name !== userData.name)
+            payload.name = body.data.name;
 
-          if (body.data.phone !== userData.phone)
+          if (body.data.phone && body.data.phone !== userData.phone)
             payload.phone = body.data.phone;
 
           if (Object.keys(payload).length > 0) {
