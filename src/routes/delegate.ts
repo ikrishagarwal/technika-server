@@ -401,6 +401,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         isMember: Boolean(userData.member),
         roomId: userData.roomId,
         paymentStatus,
+        status: paymentStatus,
         paymentUrl: userData.paymentUrl,
         users: userData.users ? Object.values(userData.users) : null,
       };
@@ -482,6 +483,7 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         },
         users: roomOwnerData.users ? Object.values(roomOwnerData.users) : null,
         paymentStatus,
+        status: paymentStatus,
         paymentUrl: roomOwnerData.paymentUrl,
       };
     } catch (error) {
