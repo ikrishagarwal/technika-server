@@ -573,12 +573,32 @@ const Delegate: FastifyPluginAsync = async (fastify): Promise<void> => {
         }
       }
 
+      let ticketId = Tickets.Delegate;
+
+      const eventSnap = await db
+        .collection("event_registrations")
+        .doc(user.uid)
+        .get();
+
+      if (eventSnap.exists) {
+        const eventData = eventSnap.data();
+        if (eventData?.events) {
+          const hasConfirmedEvent = Object.values(eventData.events).some(
+            (event: any) => event.status === PaymentStatus.Confirmed
+          );
+
+          if (hasConfirmedEvent) {
+            ticketId = Tickets.DelegateDiscounted;
+          }
+        }
+      }
+
       const tiqrResponse = await TiQR.createBooking({
         email: user.email ?? "",
         first_name: body.data.name.split(" ").at(0)!,
         last_name: body.data.name.split(" ").slice(1).join(" ") || "",
         phone_number: body.data.phone,
-        ticket: Tickets.Delegate,
+        ticket: ticketId,
         meta_data: {
           address: body.data.address || "",
           college: body.data.college || "",

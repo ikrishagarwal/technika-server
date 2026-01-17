@@ -166,6 +166,7 @@ const Webhook: FastifyPluginAsync = async (fastify): Promise<void> => {
 
       case Tickets.Delegate:
       case Tickets.DelegateComplimentary:
+      case Tickets.DelegateDiscounted:
         const delegateEntry = await db
           .collection(collectionName)
           .where("tiqrBookingUid", "==", body.booking_uid)
